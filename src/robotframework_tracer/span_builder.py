@@ -43,16 +43,16 @@ class SpanBuilder:
         """Create root span for test suite."""
         attrs = AttributeExtractor.from_suite(data, result)
         name = SpanBuilder._add_prefix(data.name, "SUITE", prefix_style)
-        
+
         # Create context with baggage
         ctx = baggage.set_baggage("rf.suite.id", result.id)
         ctx = baggage.set_baggage("rf.version", robot.version.get_version(), ctx)
-        
+
         # Add suite metadata to baggage (limit to avoid too much data)
-        if hasattr(data, 'metadata') and data.metadata:
+        if hasattr(data, "metadata") and data.metadata:
             for key, value in list(data.metadata.items())[:5]:  # Limit to 5 metadata items
                 ctx = baggage.set_baggage(f"rf.suite.metadata.{key}", str(value), ctx)
-        
+
         span = tracer.start_span(name, context=ctx, kind=trace.SpanKind.INTERNAL, attributes=attrs)
         return span
 
@@ -67,10 +67,12 @@ class SpanBuilder:
         return span
 
     @staticmethod
-    def create_keyword_span(tracer, data, result, parent_context, max_arg_length=200, prefix_style="none"):
+    def create_keyword_span(
+        tracer, data, result, parent_context, max_arg_length=200, prefix_style="none"
+    ):
         """Create child span for keyword."""
         attrs = AttributeExtractor.from_keyword(data, result, max_arg_length)
-        
+
         # Build keyword name with arguments (like RF test step line)
         kw_name = data.name
         if data.args:
@@ -80,16 +82,16 @@ class SpanBuilder:
             if len(args_str) > 100:
                 args_str = args_str[:100] + "..."
             kw_name = f"{data.name} {args_str}"
-        
+
         # Determine span type for prefix
         if data.type in ("SETUP", "TEARDOWN"):
             span_type = data.type
         else:
             span_type = "KEYWORD"
-        
+
         # Add prefix based on style
         kw_name = SpanBuilder._add_prefix(kw_name, span_type, prefix_style)
-        
+
         span = tracer.start_span(
             kw_name, context=parent_context, kind=trace.SpanKind.INTERNAL, attributes=attrs
         )
@@ -115,14 +117,14 @@ class SpanBuilder:
                 "message": result.message,
                 "rf.status": "FAIL",
             }
-            
+
             # Try to extract exception type if available
-            if hasattr(result, 'error') and result.error:
+            if hasattr(result, "error") and result.error:
                 event_attrs["exception.type"] = type(result.error).__name__
                 event_attrs["exception.message"] = str(result.error)
-            
+
             # Add timestamp
-            if hasattr(result, 'endtime') and result.endtime:
+            if hasattr(result, "endtime") and result.endtime:
                 event_attrs["timestamp"] = result.endtime
-            
+
             span.add_event("test.failed", event_attrs)

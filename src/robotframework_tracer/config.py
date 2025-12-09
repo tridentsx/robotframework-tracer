@@ -8,9 +8,7 @@ class TracerConfig:
         self.endpoint = self._get_config(
             "endpoint", kwargs, "OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318/v1/traces"
         )
-        self.service_name = self._get_config(
-            "service_name", kwargs, "OTEL_SERVICE_NAME", "rf"
-        )
+        self.service_name = self._get_config("service_name", kwargs, "OTEL_SERVICE_NAME", "rf")
         self.protocol = self._get_config("protocol", kwargs, "RF_TRACER_PROTOCOL", "http")
         self.capture_arguments = self._get_bool_config(
             "capture_arguments", kwargs, "RF_TRACER_CAPTURE_ARGUMENTS", True
