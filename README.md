@@ -199,7 +199,7 @@ Apache License 2.0 - See [LICENSE](LICENSE) for details.
 
 ## Status
 
-**Current Status:** Planning/Development Phase  
-**Target Release:** v1.0.0
+**Current Version:** v0.1.0  
+**Status:** Production-ready MVP
 
-This project is under active development. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the development roadmap.
+Core functionality is complete and tested. See [CHANGELOG.md](CHANGELOG.md) for version history and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the development roadmap.
