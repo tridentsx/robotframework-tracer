@@ -46,10 +46,10 @@ grpc = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/robotframework-tracer"
-Documentation = "https://github.com/yourusername/robotframework-tracer/blob/main/README.md"
-Repository = "https://github.com/yourusername/robotframework-tracer"
-Issues = "https://github.com/yourusername/robotframework-tracer/issues"
+Homepage = "https://github.com/tridentsx/robotframework-tracer"
+Documentation = "https://github.com/tridentsx/robotframework-tracer/blob/main/README.md"
+Repository = "https://github.com/tridentsx/robotframework-tracer"
+Issues = "https://github.com/tridentsx/robotframework-tracer/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
