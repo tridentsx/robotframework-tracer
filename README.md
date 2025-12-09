@@ -54,7 +54,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -e ".[dev]"
 ```
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed development setup instructions.
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed development setup instructions.
 
 ## Quick Start
 
@@ -191,15 +191,15 @@ See the [examples/](examples/) directory for complete examples:
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! Please see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines.
 
 ## License
 
-Apache License 2.0 - See [LICENSE](LICENSE) for details.
+Apache License 2.0 - See [docs/LICENSE](docs/LICENSE) for details.
 
 ## Status
 
 **Current Version:** v0.1.0  
 **Status:** Production-ready MVP
 
-Core functionality is complete and tested. See [CHANGELOG.md](CHANGELOG.md) for version history and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the development roadmap.
+Core functionality is complete and tested. See [docs/CHANGELOG.md](docs/CHANGELOG.md) for version history and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the development roadmap.
