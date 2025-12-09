@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14318:4318"   # OTLP HTTP receiver (mapped to host 14318)
+      - "14317:4317"   # OTLP gRPC receiver (mapped to host 14317)
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
