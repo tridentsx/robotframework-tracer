@@ -5,12 +5,20 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace.sampling import TraceIdRatioBased, ParentBased
 from opentelemetry.semconv.resource import ResourceAttributes
+from opentelemetry.propagate import inject
 import platform
 import sys
 import robot
 
 from .config import TracerConfig
 from .span_builder import SpanBuilder
+
+# Try to import Robot Framework BuiltIn library for variable setting
+try:
+    from robot.libraries.BuiltIn import BuiltIn
+    BUILTIN_AVAILABLE = True
+except ImportError:
+    BUILTIN_AVAILABLE = False
 
 # Try to import gRPC exporter (optional dependency)
 try:
@@ -121,6 +129,50 @@ class TracingListener:
         self.tracer = trace.get_tracer(__name__)
         self.span_stack = []
 
+    def _set_trace_context_variables(self):
+        """Set Robot Framework variables with current trace context."""
+        if not BUILTIN_AVAILABLE:
+            return
+        
+        try:
+            # Get current trace context
+            headers = {}
+            inject(headers)  # Injects traceparent, tracestate headers
+            
+            # Get current span info
+            current_span = trace.get_current_span()
+            trace_id = None
+            span_id = None
+            
+            if current_span.is_recording():
+                span_context = current_span.get_span_context()
+                trace_id = format(span_context.trace_id, '032x')
+                span_id = format(span_context.span_id, '016x')
+            
+            # Set RF variables for different protocols
+            builtin = BuiltIn()
+            
+            # HTTP headers (for REST APIs, web services)
+            builtin.set_test_variable("${TRACE_HEADERS}", headers)
+            
+            # Individual trace components (for custom protocols like Diameter)
+            if trace_id:
+                builtin.set_test_variable("${TRACE_ID}", trace_id)
+            if span_id:
+                builtin.set_test_variable("${SPAN_ID}", span_id)
+            
+            # W3C traceparent format (for manual header construction)
+            if headers.get('traceparent'):
+                builtin.set_test_variable("${TRACEPARENT}", headers['traceparent'])
+            
+            # Tracestate (for vendor-specific data)
+            if headers.get('tracestate'):
+                builtin.set_test_variable("${TRACESTATE}", headers['tracestate'])
+                
+        except Exception as e:
+            # Silently ignore errors to avoid breaking tests
+            pass
+
     def start_suite(self, data, result):
         """Create root span for suite."""
         try:
@@ -151,6 +203,11 @@ class TracingListener:
                 self.tracer, data, result, parent_context, self.config.span_prefix_style
             )
             self.span_stack.append(span)
+            
+            # Set trace context variables within the span context
+            with trace.use_span(span):
+                self._set_trace_context_variables()
+            
         except Exception as e:
             print(f"TracingListener error in start_test: {e}")
 
