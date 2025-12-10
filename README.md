@@ -12,6 +12,7 @@ This enables you to:
 - **Analyze performance** and identify slow keywords or tests
 - **Correlate tests with application traces** in distributed systems
 - **Monitor test execution** across CI/CD pipelines
+- **Propagate trace context** to your System Under Test (SUT)
 
 ![Robot Framework Trace Visualization](docs/robotframework-trace.jpg)
 
@@ -76,6 +77,33 @@ robot --listener robotframework_tracer.TracingListener tests/
 ### 3. View traces
 
 Open http://localhost:16686 in your browser to see your test traces in Jaeger UI.
+
+## Trace Context Propagation
+
+The tracer automatically makes trace context available as Robot Framework variables for propagating to your System Under Test:
+
+```robot
+*** Test Cases ***
+Test API With Distributed Tracing
+    # HTTP headers automatically include trace context
+    ${response}=    POST    http://my-sut/api
+    ...    json={"data": "test"}
+    ...    headers=${TRACE_HEADERS}
+    
+    # For custom protocols, use individual components
+    ${diameter_msg}=    Create Diameter Request
+    ...    trace_id=${TRACE_ID}
+    ...    span_id=${SPAN_ID}
+```
+
+**Available variables:**
+- `${TRACE_HEADERS}` - HTTP headers dictionary
+- `${TRACE_ID}` - 32-character hex trace ID  
+- `${SPAN_ID}` - 16-character hex span ID
+- `${TRACEPARENT}` - W3C traceparent header
+- `${TRACESTATE}` - W3C tracestate header
+
+See [docs/trace-propagation.md](docs/trace-propagation.md) for complete examples.
 
 ## Configuration
 
@@ -199,7 +227,7 @@ Apache License 2.0 - See [docs/LICENSE](docs/LICENSE) for details.
 
 ## Status
 
-**Current Version:** v0.1.0  
-**Status:** Production-ready MVP
+**Current Version:** v0.2.0  
+**Status:** Production-ready with trace propagation
 
 Core functionality is complete and tested. See [docs/CHANGELOG.md](docs/CHANGELOG.md) for version history and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the development roadmap.

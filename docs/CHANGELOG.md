@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.2] - 2025-12-09
+## [0.2.0] - 2025-12-10
+
+### Added
+- **Trace context propagation** to Robot Framework variables
+- `${TRACE_HEADERS}` variable with HTTP headers for REST APIs
+- `${TRACE_ID}` and `${SPAN_ID}` variables for custom protocols (Diameter, etc.)
+- `${TRACEPARENT}` and `${TRACESTATE}` variables for W3C Trace Context
+- Comprehensive documentation for trace propagation (`docs/trace-propagation.md`)
+- Integration tests with HTTP, Diameter, and custom protocol examples
+- 6 new unit tests for trace context functionality
+
+### Changed
+- Improved test coverage to 74% (from 72%)
+
+## [0.2.0] - 2025-12-09
 
 ### Fixed
 - Code formatting issues (black compliance)
@@ -34,7 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Example with Jaeger
 - Comprehensive documentation
 
-[Unreleased]: https://github.com/tridentsx/robotframework-tracer/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/tridentsx/robotframework-tracer/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/tridentsx/robotframework-tracer/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/tridentsx/robotframework-tracer/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/tridentsx/robotframework-tracer/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/tridentsx/robotframework-tracer/releases/tag/v0.1.0
