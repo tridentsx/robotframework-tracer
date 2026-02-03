@@ -1,14 +1,15 @@
-from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as HTTPExporter
-from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.trace.sampling import TraceIdRatioBased, ParentBased
-from opentelemetry.semconv.resource import ResourceAttributes
-from opentelemetry.propagate import inject
 import platform
 import sys
+
 import robot
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as HTTPExporter
+from opentelemetry.propagate import inject
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
+from opentelemetry.semconv.resource import ResourceAttributes
 
 from .config import TracerConfig
 from .span_builder import SpanBuilder
@@ -157,7 +158,7 @@ class TracingListener:
             if headers.get("tracestate"):
                 builtin.set_test_variable("${TRACESTATE}", headers["tracestate"])
 
-        except Exception as e:
+        except Exception:
             # Silently ignore errors to avoid breaking tests
             pass
 

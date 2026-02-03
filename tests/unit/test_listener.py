@@ -1,5 +1,5 @@
 from unittest.mock import Mock, patch
-import pytest
+
 from robotframework_tracer.listener import TracingListener
 
 

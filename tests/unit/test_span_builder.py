@@ -1,7 +1,9 @@
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
+
 from opentelemetry.trace import StatusCode
-from robotframework_tracer.span_builder import SpanBuilder
+
 from robotframework_tracer.attributes import RFAttributes
+from robotframework_tracer.span_builder import SpanBuilder
 
 
 def test_create_suite_span():

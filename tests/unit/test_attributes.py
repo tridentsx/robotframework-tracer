@@ -1,4 +1,5 @@
 from unittest.mock import Mock
+
 from robotframework_tracer.attributes import AttributeExtractor, RFAttributes
 
 

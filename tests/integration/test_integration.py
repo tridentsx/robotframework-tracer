@@ -1,7 +1,6 @@
-import os
-import sys
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
+
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -23,7 +22,7 @@ def test_simple_suite_tracing():
 
                 # Run Robot tests with listener
                 test_suite = Path(__file__).parent / "test_suites" / "simple.robot"
-                result = run(
+                run(
                     str(test_suite),
                     listener="robotframework_tracer.TracingListener",
                     outputdir="/tmp/robot_output",
@@ -63,7 +62,7 @@ def test_nested_suite_tracing():
 
                 # Run Robot tests with listener
                 test_suite = Path(__file__).parent / "test_suites" / "nested.robot"
-                result = run(
+                run(
                     str(test_suite),
                     listener="robotframework_tracer.TracingListener",
                     outputdir="/tmp/robot_output",

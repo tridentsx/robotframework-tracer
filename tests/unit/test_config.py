@@ -1,5 +1,3 @@
-import os
-import pytest
 from robotframework_tracer.config import TracerConfig
 
 
