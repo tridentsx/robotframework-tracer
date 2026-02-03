@@ -163,3 +163,27 @@ def test_parse_listener_args_simple():
 
     assert result["service_name"] == "mytest"
     assert result["capture_logs"] == "true"
+
+
+def test_parse_listener_args_multiple_options_with_url():
+    """Test multiple options including a URL."""
+    from robotframework_tracer.listener import TracingListener
+
+    # RF splits 'endpoint=http://jaeger:4318/v1/traces:service_name=api-tests:capture_logs=true'
+    args = ("endpoint=http", "//jaeger", "4318/v1/traces", "service_name=api-tests", "capture_logs=true")
+    result = TracingListener._parse_listener_args(args)
+
+    assert result["endpoint"] == "http://jaeger:4318/v1/traces"
+    assert result["service_name"] == "api-tests"
+    assert result["capture_logs"] == "true"
+
+
+def test_parse_listener_args_https_url():
+    """Test HTTPS URL reconstruction."""
+    from robotframework_tracer.listener import TracingListener
+
+    # RF splits 'endpoint=https://tempo.example.com:443/v1/traces'
+    args = ("endpoint=https", "//tempo.example.com", "443/v1/traces")
+    result = TracingListener._parse_listener_args(args)
+
+    assert result["endpoint"] == "https://tempo.example.com:443/v1/traces"
