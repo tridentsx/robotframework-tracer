@@ -37,57 +37,20 @@ class TracingListener:
 
     ROBOT_LISTENER_API_VERSION = 3
 
-    def __init__(
-        self,
-        endpoint=None,
-        service_name=None,
-        protocol=None,
-        capture_arguments=None,
-        max_arg_length=None,
-        capture_logs=None,
-        sample_rate=None,
-        span_prefix_style=None,
-        log_level=None,
-        max_log_length=None,
-    ):
+    def __init__(self, *args, **kwargs):
         """Initialize the tracing listener.
 
-        Args:
-            endpoint: OTLP endpoint URL
-            service_name: Service name for traces
-            protocol: Protocol (http or grpc)
-            capture_arguments: Whether to capture keyword arguments
-            max_arg_length: Maximum length for arguments
-            capture_logs: Whether to capture log messages
-            sample_rate: Sampling rate (0.0-1.0)
-            span_prefix_style: Span prefix style (none, text, emoji)
-            log_level: Minimum log level to capture (DEBUG, INFO, WARN, ERROR)
-            max_log_length: Maximum length for log messages
-        """
-        # Build kwargs dict from provided arguments
-        kwargs = {}
-        if endpoint is not None:
-            kwargs["endpoint"] = endpoint
-        if service_name is not None:
-            kwargs["service_name"] = service_name
-        if protocol is not None:
-            kwargs["protocol"] = protocol
-        if capture_arguments is not None:
-            kwargs["capture_arguments"] = capture_arguments
-        if max_arg_length is not None:
-            kwargs["max_arg_length"] = max_arg_length
-        if capture_logs is not None:
-            kwargs["capture_logs"] = capture_logs
-        if sample_rate is not None:
-            kwargs["sample_rate"] = sample_rate
-        if span_prefix_style is not None:
-            kwargs["span_prefix_style"] = span_prefix_style
-        if log_level is not None:
-            kwargs["log_level"] = log_level
-        if max_log_length is not None:
-            kwargs["max_log_length"] = max_log_length
+        Accepts arguments in multiple formats:
+        - Environment variables (recommended): OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME
+        - Keyword arguments: endpoint=..., service_name=...
+        - RF listener args: key=value pairs (comma-separated)
 
-        self.config = TracerConfig(**kwargs)
+        Note: Robot Framework splits listener arguments on ':' which breaks URLs.
+        This listener automatically reconstructs URLs that were split.
+        """
+        parsed_kwargs = self._parse_listener_args(args)
+        parsed_kwargs.update(kwargs)
+        self.config = TracerConfig(**parsed_kwargs)
 
         # Initialize OpenTelemetry with automatic resource detection
         resource_attrs = {
@@ -129,6 +92,30 @@ class TracingListener:
 
         self.tracer = trace.get_tracer(__name__)
         self.span_stack = []
+
+    @staticmethod
+    def _parse_listener_args(args):
+        """Parse Robot Framework listener arguments.
+
+        RF splits arguments on ':' which breaks URLs like http://host:port.
+        This method reconstructs the original string and parses key=value pairs.
+        """
+        if not args:
+            return {}
+
+        import re
+
+        # Rejoin with ':' to reconstruct original (RF splits on ':')
+        rejoined = ":".join(args)
+
+        # Match: key=value where value may contain URLs (stops at comma+key= or end)
+        kwargs = {}
+        pattern = r"(\w+)=([^,]*?)(?=,\w+=|$)"
+        for match in re.finditer(pattern, rejoined):
+            key, value = match.groups()
+            kwargs[key.strip()] = value.strip()
+
+        return kwargs
 
     def _set_trace_context_variables(self):
         """Set Robot Framework variables with current trace context."""

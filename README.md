@@ -71,8 +71,19 @@ docker run -d --name jaeger \
 ### 2. Run your tests with the listener
 
 ```bash
+# Basic usage (uses default endpoint localhost:4318)
 robot --listener robotframework_tracer.TracingListener tests/
+
+# With environment variables (recommended for custom endpoints)
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+export OTEL_SERVICE_NAME=my-tests
+robot --listener robotframework_tracer.TracingListener tests/
+
+# With inline options (comma-separated key=value pairs)
+robot --listener "robotframework_tracer.TracingListener:service_name=my-tests,capture_logs=true" tests/
 ```
+
+> **Note:** Robot Framework splits listener arguments on `:`. URLs containing `://` are automatically reconstructed by the listener.
 
 ### 3. View traces
 

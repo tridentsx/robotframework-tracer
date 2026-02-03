@@ -131,3 +131,33 @@ def test_error_handling(mock_trace, mock_provider, mock_exporter, capsys):
 
     captured = capsys.readouterr()
     assert "TracingListener error" in captured.out
+
+
+def test_parse_listener_args_url_reconstruction():
+    """Test that URLs split by RF's colon separator are reconstructed."""
+    from robotframework_tracer.listener import TracingListener
+
+    # RF splits 'endpoint=http://localhost:4318/v1/traces,service_name=test' on ':'
+    args = ("endpoint=http", "//localhost", "4318/v1/traces,service_name=test")
+    result = TracingListener._parse_listener_args(args)
+
+    assert result["endpoint"] == "http://localhost:4318/v1/traces"
+    assert result["service_name"] == "test"
+
+
+def test_parse_listener_args_empty():
+    """Test empty args returns empty dict."""
+    from robotframework_tracer.listener import TracingListener
+
+    assert TracingListener._parse_listener_args(()) == {}
+
+
+def test_parse_listener_args_simple():
+    """Test simple key=value parsing."""
+    from robotframework_tracer.listener import TracingListener
+
+    args = ("service_name=mytest,capture_logs=true",)
+    result = TracingListener._parse_listener_args(args)
+
+    assert result["service_name"] == "mytest"
+    assert result["capture_logs"] == "true"
