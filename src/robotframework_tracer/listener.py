@@ -98,23 +98,35 @@ class TracingListener:
     def _parse_listener_args(args):
         """Parse Robot Framework listener arguments.
 
-        RF splits arguments on ':' which breaks URLs like http://host:port.
-        This method reconstructs the original string and parses key=value pairs.
+        RF splits arguments on ':' and passes each as a separate arg.
+        Example: 'listener:endpoint=http://host:4318:service_name=test'
+        becomes args = ('endpoint=http', '//host', '4318', 'service_name=test')
+
+        This method reconstructs URLs and parses key=value pairs.
         """
         if not args:
             return {}
 
-        import re
-
-        # Rejoin with ':' to reconstruct original (RF splits on ':')
-        rejoined = ":".join(args)
-
-        # Match: key=value where value may contain URLs (stops at comma+key= or end)
         kwargs = {}
-        pattern = r"(\w+)=([^,]*?)(?=,\w+=|$)"
-        for match in re.finditer(pattern, rejoined):
-            key, value = match.groups()
-            kwargs[key.strip()] = value.strip()
+        i = 0
+        while i < len(args):
+            arg = args[i]
+
+            if "=" in arg:
+                key, value = arg.split("=", 1)
+                # Check if value is start of a URL that got split
+                if value in ("http", "https") and i + 1 < len(args) and args[i + 1].startswith("//"):
+                    # Reconstruct URL: scheme + :// + rest
+                    url_parts = [value]
+                    i += 1
+                    while i < len(args) and "=" not in args[i]:
+                        url_parts.append(args[i])
+                        i += 1
+                    kwargs[key.strip()] = ":".join(url_parts)
+                    continue
+                else:
+                    kwargs[key.strip()] = value.strip()
+            i += 1
 
         return kwargs
 

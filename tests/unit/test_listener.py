@@ -137,8 +137,9 @@ def test_parse_listener_args_url_reconstruction():
     """Test that URLs split by RF's colon separator are reconstructed."""
     from robotframework_tracer.listener import TracingListener
 
-    # RF splits 'endpoint=http://localhost:4318/v1/traces,service_name=test' on ':'
-    args = ("endpoint=http", "//localhost", "4318/v1/traces,service_name=test")
+    # RF splits 'endpoint=http://localhost:4318/v1/traces:service_name=test' on ':'
+    # becomes: ('endpoint=http', '//localhost', '4318/v1/traces', 'service_name=test')
+    args = ("endpoint=http", "//localhost", "4318/v1/traces", "service_name=test")
     result = TracingListener._parse_listener_args(args)
 
     assert result["endpoint"] == "http://localhost:4318/v1/traces"
@@ -153,10 +154,11 @@ def test_parse_listener_args_empty():
 
 
 def test_parse_listener_args_simple():
-    """Test simple key=value parsing."""
+    """Test simple key=value parsing with colon separator."""
     from robotframework_tracer.listener import TracingListener
 
-    args = ("service_name=mytest,capture_logs=true",)
+    # RF splits 'service_name=mytest:capture_logs=true' on ':'
+    args = ("service_name=mytest", "capture_logs=true")
     result = TracingListener._parse_listener_args(args)
 
     assert result["service_name"] == "mytest"

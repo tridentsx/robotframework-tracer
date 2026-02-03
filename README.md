@@ -79,11 +79,14 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
 export OTEL_SERVICE_NAME=my-tests
 robot --listener robotframework_tracer.TracingListener tests/
 
-# With inline options (comma-separated key=value pairs)
-robot --listener "robotframework_tracer.TracingListener:service_name=my-tests,capture_logs=true" tests/
+# With inline options (colon-separated key=value pairs)
+robot --listener "robotframework_tracer.TracingListener:service_name=my-tests:capture_logs=true" tests/
+
+# With custom endpoint (URL colons are automatically handled)
+robot --listener "robotframework_tracer.TracingListener:endpoint=http://jaeger:4318/v1/traces:service_name=my-tests" tests/
 ```
 
-> **Note:** Robot Framework splits listener arguments on `:`. URLs containing `://` are automatically reconstructed by the listener.
+> **Note:** Robot Framework splits listener arguments on `:`. Use colons to separate options. URLs containing `://` are automatically reconstructed.
 
 ### 3. View traces
 

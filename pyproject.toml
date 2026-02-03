@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "robotframework-tracer"
-version = "0.2.2"
+version = "0.2.3"
 description = "OpenTelemetry distributed tracing for Robot Framework"
 readme = "README.md"
 requires-python = ">=3.8"
