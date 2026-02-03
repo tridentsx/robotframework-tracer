@@ -1,14 +1,11 @@
 """Tests for trace context propagation functionality."""
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from unittest.mock import Mock, patch
 
-from robotframework_tracer.listener import TracingListener
+from opentelemetry import trace
+
 from robotframework_tracer.config import TracerConfig
+from robotframework_tracer.listener import TracingListener
 
 
 class TestTraceContextPropagation:
@@ -33,7 +30,7 @@ class TestTraceContextPropagation:
 
         # Create a test span
         tracer = trace.get_tracer(__name__)
-        with tracer.start_as_current_span("test_span") as span:
+        with tracer.start_as_current_span("test_span"):
             # Call the method
             self.listener._set_trace_context_variables()
 
@@ -63,7 +60,7 @@ class TestTraceContextPropagation:
         mock_builtin_class.return_value = mock_builtin
 
         tracer = trace.get_tracer(__name__)
-        with tracer.start_as_current_span("test_span") as span:
+        with tracer.start_as_current_span("test_span"):
             self.listener._set_trace_context_variables()
 
             # Get the calls to set_test_variable

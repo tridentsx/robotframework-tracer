@@ -1,6 +1,6 @@
-from opentelemetry import trace, baggage
-from opentelemetry.trace import Status, StatusCode
 import robot
+from opentelemetry import baggage, trace
+from opentelemetry.trace import Status, StatusCode
 
 from .attributes import AttributeExtractor, RFAttributes
 
