@@ -38,19 +38,20 @@ class TracingListener:
 
     ROBOT_LISTENER_API_VERSION = 3
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args):
         """Initialize the tracing listener.
 
-        Accepts arguments in multiple formats:
-        - Environment variables (recommended): OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME
-        - Keyword arguments: endpoint=..., service_name=...
-        - RF listener args: key=value pairs (comma-separated)
+        Args are colon-separated key=value pairs from Robot Framework.
+        Example: robot --listener "TracingListener:service_name=test:capture_logs=true"
 
-        Note: Robot Framework splits listener arguments on ':' which breaks URLs.
-        This listener automatically reconstructs URLs that were split.
+        For URLs with colons, they are automatically reconstructed:
+        Example: robot --listener "TracingListener:endpoint=http://host:4318/v1/traces"
+
+        Recommended: Use environment variables for endpoints:
+            OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces
+            OTEL_SERVICE_NAME=my-tests
         """
         parsed_kwargs = self._parse_listener_args(args)
-        parsed_kwargs.update(kwargs)
         self.config = TracerConfig(**parsed_kwargs)
 
         # Initialize OpenTelemetry with automatic resource detection

@@ -8,7 +8,8 @@ from robotframework_tracer.listener import TracingListener
 @patch("robotframework_tracer.listener.trace")
 def test_listener_initialization(mock_trace, mock_provider, mock_exporter):
     """Test listener initialization."""
-    listener = TracingListener(endpoint="http://jaeger:4318", service_name="test")
+    # Args as RF would pass them (colon-separated, split by RF)
+    listener = TracingListener("endpoint=http", "//jaeger", "4318", "service_name=test")
 
     assert listener.config.endpoint == "http://jaeger:4318"
     assert listener.config.service_name == "test"
