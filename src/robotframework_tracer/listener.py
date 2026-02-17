@@ -1,14 +1,20 @@
+import base64
+import gzip
+import json
 import os
 import platform
+import re
 import sys
 
 import robot
+from google.protobuf.json_format import MessageToDict
 from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.common.trace_encoder import encode_spans
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as HTTPExporter
 from opentelemetry.propagate import extract, inject
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
 from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 from opentelemetry.semconv.resource import ResourceAttributes
 
@@ -32,6 +38,35 @@ try:
     GRPC_AVAILABLE = True
 except ImportError:
     GRPC_AVAILABLE = False
+
+
+class _OtlpJsonFileExporter(SpanExporter):
+    """Write spans as OTLP-compatible JSON — one ExportTraceServiceRequest per batch."""
+
+    def __init__(self, out):
+        self._out = out
+
+    @staticmethod
+    def _fix_byte_ids(d):
+        """Convert base64-encoded trace/span IDs to hex strings."""
+        for rs in d.get("resource_spans", []):
+            for ss in rs.get("scope_spans", []):
+                for span in ss.get("spans", []):
+                    for field in ("trace_id", "span_id", "parent_span_id"):
+                        if field in span and isinstance(span[field], str):
+                            span[field] = base64.b64decode(span[field]).hex()
+        return d
+
+    def export(self, spans):
+        pb = encode_spans(spans)
+        d = MessageToDict(pb, preserving_proto_field_name=True)
+        d = self._fix_byte_ids(d)
+        self._out.write(json.dumps(d, separators=(",", ":")) + "\n")
+        self._out.flush()
+        return SpanExportResult.SUCCESS
+
+    def shutdown(self):
+        pass
 
 
 class TracingListener:
@@ -96,6 +131,12 @@ class TracingListener:
         self.tracer = trace.get_tracer(__name__)
         self.span_stack = []
         self.parent_context = self._extract_parent_context()
+        self._trace_file = None
+        self._file_processor = None
+
+        # If an explicit file path is given, open it now
+        if self.config.trace_output_file and self.config.trace_output_file != "auto":
+            self._open_trace_file(self.config.trace_output_file)
 
     @staticmethod
     def _parse_listener_args(args):
@@ -160,6 +201,29 @@ class TracingListener:
 
         return extract(carrier)
 
+    def _open_trace_file(self, filepath):
+        """Open a trace output file and attach a compact JSON exporter to the provider."""
+        try:
+            if self.config.trace_output_format == "gz":
+                filepath = filepath + ".gz" if not filepath.endswith(".gz") else filepath
+                self._trace_file = gzip.open(filepath, "wt")
+            else:
+                self._trace_file = open(filepath, "w")
+            file_exporter = _OtlpJsonFileExporter(out=self._trace_file)
+            self._file_processor = BatchSpanProcessor(file_exporter)
+            trace.get_tracer_provider().add_span_processor(self._file_processor)
+            print(f"Trace output file: {filepath}")
+        except Exception as e:
+            print(f"Warning: Failed to open trace output file '{filepath}': {e}")
+            self._trace_file = None
+
+    @staticmethod
+    def _sanitize_filename(name):
+        """Convert a suite name to a safe filename component."""
+        # Replace spaces and non-alphanumeric chars with underscores
+        safe = re.sub(r"[^\w]+", "_", name).strip("_").lower()
+        return safe or "trace"
+
     def _set_trace_context_variables(self):
         """Set Robot Framework variables with current trace context."""
         if not BUILTIN_AVAILABLE:
@@ -215,6 +279,14 @@ class TracingListener:
                 parent_context=self.parent_context,
             )
             self.span_stack.append(span)
+
+            # Auto-generate trace output filename on first suite span
+            if self.config.trace_output_file == "auto" and self._trace_file is None:
+                trace_id = format(span.get_span_context().trace_id, "032x")
+                suite_name = self._sanitize_filename(data.name)
+                ext = "json.gz" if self.config.trace_output_format == "gz" else "json"
+                filename = f"{suite_name}_{trace_id[:8]}_traces.{ext}"
+                self._open_trace_file(filename)
         except Exception as e:
             print(f"TracingListener error in start_suite: {e}")
 
@@ -309,6 +381,9 @@ class TracingListener:
                 span = self.span_stack.pop()
                 span.end()
             trace.get_tracer_provider().force_flush()
+            if self._trace_file:
+                self._trace_file.close()
+                self._trace_file = None
         except Exception as e:
             print(f"TracingListener error in close: {e}")
 

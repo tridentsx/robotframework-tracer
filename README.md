@@ -193,6 +193,10 @@ robot --listener robotframework_tracer.TracingListener tests/
 | `log_level` | `INFO` | Minimum log level (DEBUG, INFO, WARN, ERROR) |
 | `max_log_length` | `500` | Max length for log messages |
 | `sample_rate` | `1.0` | Sampling rate (0.0-1.0, 1.0 = no sampling) |
+| `trace_output_file` | `` | Write spans as OTLP JSON to local file (`auto` for suite-name + trace-ID naming) |
+| `trace_output_format` | `json` | Output format: `json` or `gz` (gzip-compressed) |
+
+> **Trace file import:** The output file can be imported into any OTLP-compatible backend (Jaeger, Tempo, etc.) by POSTing each line to the OTLP HTTP endpoint. See [docs/configuration.md](docs/configuration.md#importing-trace-files-into-a-backend) for details.
 
 ## Span Attributes
 
@@ -263,6 +267,6 @@ Apache License 2.0 - See [docs/LICENSE](docs/LICENSE) for details.
 ## Status
 
 **Current Version:** v0.2.0  
-**Status:** Production-ready with trace propagation
+**Status:** Production-ready with trace propagation and local file export
 
 Core functionality is complete and tested. See [docs/CHANGELOG.md](docs/CHANGELOG.md) for version history and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the development roadmap.

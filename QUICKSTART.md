@@ -71,6 +71,23 @@ robot --listener robotframework_tracer.TracingListener path/to/your/tests/
 # Open http://localhost:16686 and select "my-tests"
 ```
 
+## Save Traces to File
+
+```bash
+# Auto-generate filename from suite name + trace ID
+export RF_TRACER_OUTPUT_FILE=auto
+robot --listener robotframework_tracer.TracingListener path/to/your/tests/
+# Creates e.g. my_tests_4bf92f35_traces.json
+
+# Import the file into Jaeger (or any OTLP backend) later
+while IFS= read -r line; do
+  echo "$line" | curl -s -X POST http://localhost:14318/v1/traces \
+    -H "Content-Type: application/json" -d @-
+done < my_tests_4bf92f35_traces.json
+```
+
+See [docs/configuration.md](docs/configuration.md) for all output options.
+
 ## Troubleshooting
 
 ### Port conflicts

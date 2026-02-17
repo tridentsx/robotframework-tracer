@@ -108,6 +108,26 @@ Due to Robot Framework listener argument parsing limitations with URLs, environm
 - **Description**: Optional vendor-specific trace state, used alongside `TRACEPARENT`.
 - **Example**: `vendor1=value1,vendor2=value2`
 
+### Trace Output File
+
+#### `RF_TRACER_OUTPUT_FILE`
+- **Type**: String
+- **Default**: `` (disabled)
+- **Options**: `auto`, or an explicit file path
+- **Description**: Write spans as JSON to a local file (in addition to OTLP export). Overwrites on each run.
+- **Examples**:
+  - `auto`: Auto-generates filename from suite name and trace ID, e.g. `diverse_suite_4bf92f35_traces.json`
+  - `traces.json`: Always writes to `traces.json`
+
+#### `RF_TRACER_OUTPUT_FORMAT`
+- **Type**: String
+- **Default**: `json`
+- **Options**: `json`, `gz`
+- **Description**: Output format for the trace file. `gz` writes gzip-compressed output (streaming), typically ~90% smaller.
+- **Examples**:
+  - `json`: OTLP-compatible JSON (one batch per line)
+  - `gz`: Gzip-compressed OTLP JSON (e.g. `diverse_suite_4bf92f35_traces.json.gz`)
+
 ## Configuration Examples
 
 ### Basic Setup
@@ -148,6 +168,39 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:14318/v1/traces
 export RF_TRACER_SAMPLE_RATE=0.1  # Sample 10% of traces
 robot --listener robotframework_tracer.TracingListener tests/
 ```
+
+### With Trace Output File
+
+```bash
+# Auto-generate filename from suite name + trace ID
+export RF_TRACER_OUTPUT_FILE=auto
+robot --listener robotframework_tracer.TracingListener tests/
+# Creates e.g. diverse_suite_4bf92f35_traces.json
+
+# Gzip-compressed (streaming, ~90% smaller)
+export RF_TRACER_OUTPUT_FILE=auto
+export RF_TRACER_OUTPUT_FORMAT=gz
+robot --listener robotframework_tracer.TracingListener tests/
+# Creates e.g. diverse_suite_4bf92f35_traces.json.gz
+
+# Or use a fixed filename (overwritten each run)
+export RF_TRACER_OUTPUT_FILE=traces.json
+robot --listener robotframework_tracer.TracingListener tests/
+```
+
+#### Importing trace files into a backend
+
+The output file is standard OTLP JSON (NDJSON format — one `ExportTraceServiceRequest` per line). Import it into any OTLP-compatible backend by POSTing each line to the OTLP HTTP endpoint:
+
+```bash
+# Import into Jaeger (or any OTLP HTTP endpoint)
+while IFS= read -r line; do
+  echo "$line" | curl -s -X POST http://localhost:4318/v1/traces \
+    -H "Content-Type: application/json" -d @-
+done < diverse_suite_4bf92f35_traces.json
+```
+
+> **Note:** Jaeger UI's "Upload JSON" button expects Jaeger's own JSON format and cannot import OTLP JSON directly. Use the OTLP HTTP endpoint instead.
 
 ### Complete Configuration
 

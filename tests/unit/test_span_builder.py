@@ -168,3 +168,67 @@ def test_add_error_event_no_message():
     SpanBuilder.add_error_event(span, result)
 
     span.add_event.assert_not_called()
+
+
+def test_add_prefix_text_style():
+    """Test text prefix style for all span types."""
+    assert SpanBuilder._add_prefix("My Suite", "SUITE", "text") == "[SUITE] My Suite"
+    assert SpanBuilder._add_prefix("My Test", "TEST", "text") == "[TEST CASE] My Test"
+    assert SpanBuilder._add_prefix("My KW", "KEYWORD", "text") == "[TEST STEP] My KW"
+    assert SpanBuilder._add_prefix("Setup", "SETUP", "text") == "[SETUP] Setup"
+    assert SpanBuilder._add_prefix("Teardown", "TEARDOWN", "text") == "[TEARDOWN] Teardown"
+
+
+def test_add_prefix_emoji_style():
+    """Test emoji prefix style for all span types."""
+    assert SpanBuilder._add_prefix("My Suite", "SUITE", "emoji") == "📦 My Suite"
+    assert SpanBuilder._add_prefix("My Test", "TEST", "emoji") == "🧪 My Test"
+    assert SpanBuilder._add_prefix("My KW", "KEYWORD", "emoji") == "👟 My KW"
+    assert SpanBuilder._add_prefix("Setup", "SETUP", "emoji") == "🔧 Setup"
+    assert SpanBuilder._add_prefix("Teardown", "TEARDOWN", "emoji") == "🧹 Teardown"
+
+
+def test_add_prefix_none_style():
+    """Test none prefix style returns name unchanged."""
+    assert SpanBuilder._add_prefix("My Suite", "SUITE", "none") == "My Suite"
+    assert SpanBuilder._add_prefix("My Suite", "SUITE", "") == "My Suite"
+
+
+def test_create_suite_span_with_metadata():
+    """Test suite span includes metadata in baggage."""
+    tracer = Mock()
+    mock_span = Mock()
+    tracer.start_span.return_value = mock_span
+
+    data = Mock()
+    data.name = "Suite With Meta"
+    data.source = "/path/to/suite.robot"
+    data.metadata = {"Version": "1.0", "Author": "Test"}
+
+    result = Mock()
+    result.id = "s1"
+    result.starttime = None
+    result.endtime = None
+
+    span = SpanBuilder.create_suite_span(tracer, data, result)
+    assert span == mock_span
+
+
+def test_create_keyword_span_setup_type():
+    """Test keyword span with SETUP type uses correct prefix."""
+    tracer = Mock()
+    mock_span = Mock()
+    tracer.start_span.return_value = mock_span
+
+    data = Mock()
+    data.name = "Suite Setup"
+    data.libname = "BuiltIn"
+    data.type = "SETUP"
+    data.args = []
+
+    result = Mock()
+    parent_context = Mock()
+
+    SpanBuilder.create_keyword_span(tracer, data, result, parent_context, prefix_style="text")
+    call_args = tracer.start_span.call_args
+    assert call_args[0][0] == "[SETUP] Suite Setup"
