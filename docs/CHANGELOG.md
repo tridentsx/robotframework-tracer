@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Parent trace context support** from `TRACEPARENT`/`TRACESTATE` environment variables
+- Suite spans inherit trace context from external parent processes (CI pipelines, wrapper scripts, pabot)
+- W3C Trace Context compliant — reads standard `TRACEPARENT` and optional `TRACESTATE` env vars
+- Documentation for parent trace context (`docs/trace-propagation.md`, `docs/configuration.md`)
+- 5 new unit tests for parent context extraction and propagation
+
+### Changed
+- `SpanBuilder.create_suite_span()` accepts optional `parent_context` parameter
+- Updated ARCHITECTURE.md span hierarchy to reflect optional external parent
+
 ## [0.2.0] - 2025-12-10
 
 ### Added

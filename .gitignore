@@ -142,3 +142,6 @@ selenium-screenshot-*.png
 *.egg-info/
 .rf-tracer.yml
 .rf-tracer.json
+
+# Local dev/test sandbox
+local/

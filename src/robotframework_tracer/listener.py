@@ -1,10 +1,11 @@
+import os
 import platform
 import sys
 
 import robot
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as HTTPExporter
-from opentelemetry.propagate import inject
+from opentelemetry.propagate import extract, inject
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -94,6 +95,7 @@ class TracingListener:
 
         self.tracer = trace.get_tracer(__name__)
         self.span_stack = []
+        self.parent_context = self._extract_parent_context()
 
     @staticmethod
     def _parse_listener_args(args):
@@ -116,7 +118,11 @@ class TracingListener:
             if "=" in arg:
                 key, value = arg.split("=", 1)
                 # Check if value is start of a URL that got split
-                if value in ("http", "https") and i + 1 < len(args) and args[i + 1].startswith("//"):
+                if (
+                    value in ("http", "https")
+                    and i + 1 < len(args)
+                    and args[i + 1].startswith("//")
+                ):
                     # Reconstruct URL: scheme + :// + rest
                     url_parts = [value]
                     i += 1
@@ -130,6 +136,29 @@ class TracingListener:
             i += 1
 
         return kwargs
+
+    @staticmethod
+    def _extract_parent_context():
+        """Extract parent trace context from W3C environment variables.
+
+        Reads TRACEPARENT (and optionally TRACESTATE) from the environment
+        to establish a parent-child relationship with an external trace.
+        This enables trace correlation with CI pipelines, wrapper scripts,
+        and parallel execution tools like pabot.
+
+        Returns:
+            OpenTelemetry context with parent span, or None if not set.
+        """
+        traceparent = os.environ.get("TRACEPARENT", "")
+        if not traceparent:
+            return None
+
+        carrier = {"traceparent": traceparent}
+        tracestate = os.environ.get("TRACESTATE", "")
+        if tracestate:
+            carrier["tracestate"] = tracestate
+
+        return extract(carrier)
 
     def _set_trace_context_variables(self):
         """Set Robot Framework variables with current trace context."""
@@ -179,7 +208,11 @@ class TracingListener:
         """Create root span for suite."""
         try:
             span = SpanBuilder.create_suite_span(
-                self.tracer, data, result, self.config.span_prefix_style
+                self.tracer,
+                data,
+                result,
+                self.config.span_prefix_style,
+                parent_context=self.parent_context,
             )
             self.span_stack.append(span)
         except Exception as e:

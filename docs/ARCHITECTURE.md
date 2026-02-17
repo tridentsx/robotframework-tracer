@@ -28,24 +28,30 @@ Robot Framework Test Execution
 ### Span Hierarchy
 
 ```
-Suite Span (root)
-├── attributes: suite.name, suite.source, suite.metadata, tags
-├── baggage: rf.version, rf.suite.id
+[External Parent Span]              ← optional, from TRACEPARENT env var
 │
-├─── Test Case Span
-│    ├── attributes: test.name, test.tags, test.template
-│    ├── status: PASS/FAIL
-│    ├── events: test setup/teardown
-│    │
-│    ├─── Keyword Span (test step)
-│    │    ├── attributes: keyword.name, keyword.type, keyword.args
-│    │    ├── status: PASS/FAIL
-│    │    └── events: log messages (optional)
-│    │
-│    └─── Keyword Span (nested)
-│
-└─── Suite Teardown Span (if exists)
+└─── Suite Span (root)
+     ├── attributes: suite.name, suite.source, suite.metadata, tags
+     ├── baggage: rf.version, rf.suite.id
+     │
+     ├─── Test Case Span
+     │    ├── attributes: test.name, test.tags, test.template
+     │    ├── status: PASS/FAIL
+     │    ├── events: test setup/teardown
+     │    │
+     │    ├─── Keyword Span (test step)
+     │    │    ├── attributes: keyword.name, keyword.type, keyword.args
+     │    │    ├── status: PASS/FAIL
+     │    │    └── events: log messages (optional)
+     │    │
+     │    └─── Keyword Span (nested)
+     │
+     └─── Suite Teardown Span (if exists)
 ```
+
+When `TRACEPARENT` is set in the environment, the suite span becomes a child
+of the external parent trace. This enables correlation with CI pipelines,
+wrapper scripts, and parallel execution tools like pabot.
 
 ## Repository Structure
 
@@ -154,10 +160,14 @@ class TracingListener:
 class SpanBuilder:
     """Builds OpenTelemetry spans from Robot Framework objects."""
     
-    def create_suite_span(self, suite_data, suite_result):
-        """Create root span for test suite."""
+    def create_suite_span(tracer, data, result, prefix_style="none", parent_context=None):
+        """Create root span for test suite.
+        
+        When parent_context is provided (from TRACEPARENT env var),
+        the suite span becomes a child of the external parent trace.
+        """
         # Extract: name, source, metadata, tags
-        # Set baggage: rf.version, suite.id
+        # Set baggage: rf.version, suite.id (layered on parent_context if present)
         pass
     
     def create_test_span(self, test_data, test_result, parent_span):
@@ -305,7 +315,7 @@ class AttributeExtractor:
 ### Phase 4: Ecosystem Integration
 **Goal**: Integration with common RF patterns
 
-- [ ] Support for parallel execution (pabot)
+- [x] Support for parallel execution (pabot) — via TRACEPARENT env var
 - [ ] Support for remote execution
 - [ ] Integration with RF metrics
 - [ ] Custom span processors
@@ -356,6 +366,10 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 export OTEL_SERVICE_NAME=robot-framework-tests
 export RF_TRACER_CAPTURE_LOGS=true
 export RF_TRACER_SAMPLE_RATE=1.0
+
+# Parent trace context (set by CI pipeline or wrapper script)
+export TRACEPARENT=00-<trace-id>-<span-id>-01
+export TRACESTATE=vendor=value          # optional
 ```
 
 ### Configuration File (future)
@@ -498,7 +512,7 @@ sample_rate: 1.0
 
 ## Future Enhancements
 
-1. **Trace Context Propagation**: Inject trace context into HTTP requests
+1. ~~**Trace Context Propagation**: Inject trace context into HTTP requests~~ ✅ Implemented (TRACEPARENT/TRACESTATE)
 2. **Custom Instrumentation**: API for custom spans in test libraries
 3. **Metrics Integration**: Export RF metrics alongside traces
 4. **Dashboard Templates**: Pre-built Grafana dashboards
@@ -540,6 +554,6 @@ sample_rate: 1.0
 
 ---
 
-**Status**: Planning Phase  
-**Last Updated**: 2025-12-09  
-**Version**: 0.1.0-alpha
+**Status**: Active Development  
+**Last Updated**: 2026-02-17  
+**Version**: 0.2.4

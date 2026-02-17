@@ -93,6 +93,21 @@ Due to Robot Framework listener argument parsing limitations with URLs, environm
   - `0.5`: Capture 50% of traces
   - `0.1`: Capture 10% of traces
 
+### Parent Trace Context
+
+#### `TRACEPARENT`
+- **Type**: String (W3C Trace Context format)
+- **Default**: Not set
+- **Description**: When set, the suite span becomes a child of the specified parent trace. Follows the [W3C Trace Context](https://www.w3.org/TR/trace-context/) standard.
+- **Example**: `00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01`
+- **Use case**: CI/CD correlation, pabot parallel execution
+
+#### `TRACESTATE`
+- **Type**: String
+- **Default**: Not set
+- **Description**: Optional vendor-specific trace state, used alongside `TRACEPARENT`.
+- **Example**: `vendor1=value1,vendor2=value2`
+
 ## Configuration Examples
 
 ### Basic Setup
