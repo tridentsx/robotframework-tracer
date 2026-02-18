@@ -123,3 +123,39 @@ def test_from_keyword_arg_length_limit():
     attrs = AttributeExtractor.from_keyword(data, result, max_arg_length=100)
 
     assert len(attrs[RFAttributes.KEYWORD_ARGS]) <= 104  # 100 + "..."
+
+
+def test_from_suite_with_metadata():
+    """Test extracting suite attributes with metadata."""
+    data = Mock()
+    data.name = "Suite"
+    data.source = "/path/to/suite.robot"
+    data.metadata = {"Version": "2.0", "Team": "QA"}
+
+    result = Mock()
+    result.id = "s1"
+    result.starttime = None
+    result.endtime = None
+
+    attrs = AttributeExtractor.from_suite(data, result)
+    assert attrs["rf.suite.metadata.Version"] == "2.0"
+    assert attrs["rf.suite.metadata.Team"] == "QA"
+
+
+def test_from_test_with_template():
+    """Test extracting test attributes with template."""
+    data = Mock()
+    data.name = "Templated Test"
+    data.tags = []
+    data.template = "My Template Keyword"
+    data.timeout = "30s"
+
+    result = Mock()
+    result.id = "t1"
+    result.starttime = None
+    result.endtime = None
+    result.message = ""
+
+    attrs = AttributeExtractor.from_test(data, result)
+    assert attrs[RFAttributes.TEST_TEMPLATE] == "My Template Keyword"
+    assert attrs[RFAttributes.TEST_TIMEOUT] == "30s"

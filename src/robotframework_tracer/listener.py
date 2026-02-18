@@ -1,28 +1,32 @@
+import base64
+import gzip
+import json
 import os
 import platform
+import re
 import sys
-import time
 
 import robot
-from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as HTTPExporter
-from opentelemetry.propagate import extract, inject
-from opentelemetry.sdk.resources import SERVICE_NAME, Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
-from opentelemetry.semconv.resource import ResourceAttributes
-
-# Import logs API
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
-from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+from google.protobuf.json_format import MessageToDict
 
 # Import metrics API
-from opentelemetry import metrics
+from opentelemetry import metrics, trace
+from opentelemetry.exporter.otlp.proto.common.trace_encoder import encode_spans
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as HTTPExporter
+from opentelemetry.propagate import extract, inject
+
+# Import logs API
+from opentelemetry.sdk._logs import LoggerProvider
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
+from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
+from opentelemetry.semconv.resource import ResourceAttributes
 
 from .config import TracerConfig
 from .span_builder import SpanBuilder
@@ -44,6 +48,35 @@ try:
     GRPC_AVAILABLE = True
 except ImportError:
     GRPC_AVAILABLE = False
+
+
+class _OtlpJsonFileExporter(SpanExporter):
+    """Write spans as OTLP-compatible JSON — one ExportTraceServiceRequest per batch."""
+
+    def __init__(self, out):
+        self._out = out
+
+    @staticmethod
+    def _fix_byte_ids(d):
+        """Convert base64-encoded trace/span IDs to hex strings."""
+        for rs in d.get("resource_spans", []):
+            for ss in rs.get("scope_spans", []):
+                for span in ss.get("spans", []):
+                    for field in ("trace_id", "span_id", "parent_span_id"):
+                        if field in span and isinstance(span[field], str):
+                            span[field] = base64.b64decode(span[field]).hex()
+        return d
+
+    def export(self, spans):
+        pb = encode_spans(spans)
+        d = MessageToDict(pb, preserving_proto_field_name=True)
+        d = self._fix_byte_ids(d)
+        self._out.write(json.dumps(d, separators=(",", ":")) + "\n")
+        self._out.flush()
+        return SpanExportResult.SUCCESS
+
+    def shutdown(self):
+        pass
 
 
 class TracingListener:
@@ -106,88 +139,79 @@ class TracingListener:
         trace.set_tracer_provider(provider)
 
         self.tracer = trace.get_tracer(__name__)
-        
+
         # Initialize logs provider if log capture is enabled
         self.logger_provider = None
         self.logger = None
         if self.config.capture_logs:
             # Derive logs endpoint from traces endpoint
-            logs_endpoint = self.config.endpoint.replace('/v1/traces', '/v1/logs')
+            logs_endpoint = self.config.endpoint.replace("/v1/traces", "/v1/logs")
             if logs_endpoint == self.config.endpoint:
                 # Endpoint doesn't have /v1/traces, append /v1/logs
-                base_url = self.config.endpoint.rstrip('/')
+                base_url = self.config.endpoint.rstrip("/")
                 logs_endpoint = f"{base_url}/v1/logs"
-            
+
             log_exporter = OTLPLogExporter(endpoint=logs_endpoint)
             self.logger_provider = LoggerProvider(resource=resource)
             self.logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
-            
+
             # Get logger instance
-            from opentelemetry._logs import set_logger_provider, get_logger
+            from opentelemetry._logs import get_logger, set_logger_provider
+
             set_logger_provider(self.logger_provider)
             self.logger = get_logger(__name__)
-        
+
         # Initialize metrics provider
-        metrics_endpoint = self.config.endpoint.replace('/v1/traces', '/v1/metrics')
+        metrics_endpoint = self.config.endpoint.replace("/v1/traces", "/v1/metrics")
         if metrics_endpoint == self.config.endpoint:
-            base_url = self.config.endpoint.rstrip('/')
+            base_url = self.config.endpoint.rstrip("/")
             metrics_endpoint = f"{base_url}/v1/metrics"
-        
+
         metric_exporter = OTLPMetricExporter(endpoint=metrics_endpoint)
         metric_reader = PeriodicExportingMetricReader(metric_exporter, export_interval_millis=5000)
         meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
         metrics.set_meter_provider(meter_provider)
-        
+
         self.meter = metrics.get_meter(__name__)
-        
+
         # Create metrics instruments
         self.metrics = {
-            'tests_total': self.meter.create_counter(
-                'rf.tests.total',
-                description='Total number of tests executed',
-                unit='1'
+            "tests_total": self.meter.create_counter(
+                "rf.tests.total", description="Total number of tests executed", unit="1"
             ),
-            'tests_passed': self.meter.create_counter(
-                'rf.tests.passed',
-                description='Number of tests that passed',
-                unit='1'
+            "tests_passed": self.meter.create_counter(
+                "rf.tests.passed", description="Number of tests that passed", unit="1"
             ),
-            'tests_failed': self.meter.create_counter(
-                'rf.tests.failed',
-                description='Number of tests that failed',
-                unit='1'
+            "tests_failed": self.meter.create_counter(
+                "rf.tests.failed", description="Number of tests that failed", unit="1"
             ),
-            'tests_skipped': self.meter.create_counter(
-                'rf.tests.skipped',
-                description='Number of tests that were skipped',
-                unit='1'
+            "tests_skipped": self.meter.create_counter(
+                "rf.tests.skipped", description="Number of tests that were skipped", unit="1"
             ),
-            'test_duration': self.meter.create_histogram(
-                'rf.test.duration',
-                description='Test execution duration',
-                unit='ms'
+            "test_duration": self.meter.create_histogram(
+                "rf.test.duration", description="Test execution duration", unit="ms"
             ),
-            'suite_duration': self.meter.create_histogram(
-                'rf.suite.duration',
-                description='Suite execution duration',
-                unit='ms'
+            "suite_duration": self.meter.create_histogram(
+                "rf.suite.duration", description="Suite execution duration", unit="ms"
             ),
-            'keywords_executed': self.meter.create_counter(
-                'rf.keywords.executed',
-                description='Total number of keywords executed',
-                unit='1'
+            "keywords_executed": self.meter.create_counter(
+                "rf.keywords.executed", description="Total number of keywords executed", unit="1"
             ),
-            'keyword_duration': self.meter.create_histogram(
-                'rf.keyword.duration',
-                description='Keyword execution duration',
-                unit='ms'
+            "keyword_duration": self.meter.create_histogram(
+                "rf.keyword.duration", description="Keyword execution duration", unit="ms"
             ),
         }
-        
+
         self.meter_provider = meter_provider
-        
+
         self.span_stack = []
         self.parent_context = self._extract_parent_context()
+        self._trace_file = None
+        self._file_processor = None
+
+        # If an explicit file path is given, open it now
+        if self.config.trace_output_file and self.config.trace_output_file != "auto":
+            self._open_trace_file(self.config.trace_output_file)
         self._in_log_message = False  # Prevent recursion
 
     @staticmethod
@@ -253,6 +277,29 @@ class TracingListener:
 
         return extract(carrier)
 
+    def _open_trace_file(self, filepath):
+        """Open a trace output file and attach a compact JSON exporter to the provider."""
+        try:
+            if self.config.trace_output_format == "gz":
+                filepath = filepath + ".gz" if not filepath.endswith(".gz") else filepath
+                self._trace_file = gzip.open(filepath, "wt")
+            else:
+                self._trace_file = open(filepath, "w")
+            file_exporter = _OtlpJsonFileExporter(out=self._trace_file)
+            self._file_processor = BatchSpanProcessor(file_exporter)
+            trace.get_tracer_provider().add_span_processor(self._file_processor)
+            print(f"Trace output file: {filepath}")
+        except Exception as e:
+            print(f"Warning: Failed to open trace output file '{filepath}': {e}")
+            self._trace_file = None
+
+    @staticmethod
+    def _sanitize_filename(name):
+        """Convert a suite name to a safe filename component."""
+        # Replace spaces and non-alphanumeric chars with underscores
+        safe = re.sub(r"[^\w]+", "_", name).strip("_").lower()
+        return safe or "trace"
+
     def _set_trace_context_variables(self):
         """Set Robot Framework variables with current trace context."""
         if not BUILTIN_AVAILABLE:
@@ -308,6 +355,14 @@ class TracingListener:
                 parent_context=self.parent_context,
             )
             self.span_stack.append(span)
+
+            # Auto-generate trace output filename on first suite span
+            if self.config.trace_output_file == "auto" and self._trace_file is None:
+                trace_id = format(span.get_span_context().trace_id, "032x")
+                suite_name = self._sanitize_filename(data.name)
+                ext = "json.gz" if self.config.trace_output_format == "gz" else "json"
+                filename = f"{suite_name}_{trace_id[:8]}_traces.{ext}"
+                self._open_trace_file(filename)
         except Exception as e:
             print(f"TracingListener error in start_suite: {e}")
 
@@ -318,13 +373,12 @@ class TracingListener:
                 span = self.span_stack.pop()
                 SpanBuilder.set_span_status(span, result)
                 span.end()
-            
+
             # Emit suite metrics
-            self.metrics['suite_duration'].record(
-                result.elapsedtime,
-                {'suite': result.name, 'status': result.status}
+            self.metrics["suite_duration"].record(
+                result.elapsedtime, {"suite": result.name, "status": result.status}
             )
-            
+
         except Exception as e:
             print(f"TracingListener error in end_suite: {e}")
 
@@ -342,7 +396,7 @@ class TracingListener:
                 span = SpanBuilder.create_test_span(
                     self.tracer, data, result, None, self.config.span_prefix_style
                 )
-            
+
             self.span_stack.append(span)
 
             # Set trace context variables within the span context
@@ -361,27 +415,38 @@ class TracingListener:
                 if result.status == "FAIL":
                     SpanBuilder.add_error_event(span, result)
                 span.end()
-            
+
             # Emit test metrics
-            self.metrics['tests_total'].add(1, {'suite': result.parent.name if hasattr(result, 'parent') else 'unknown'})
-            
-            if result.status == "PASS":
-                self.metrics['tests_passed'].add(1, {'suite': result.parent.name if hasattr(result, 'parent') else 'unknown'})
-            elif result.status == "FAIL":
-                self.metrics['tests_failed'].add(1, {'suite': result.parent.name if hasattr(result, 'parent') else 'unknown'})
-                # Add tags dimension for failure analysis
-                if hasattr(result, 'tags') and result.tags:
-                    for tag in list(result.tags)[:5]:  # Limit to 5 tags
-                        self.metrics['tests_failed'].add(1, {'tag': str(tag)})
-            elif result.status == "SKIP":
-                self.metrics['tests_skipped'].add(1, {'suite': result.parent.name if hasattr(result, 'parent') else 'unknown'})
-            
-            # Record test duration
-            self.metrics['test_duration'].record(
-                result.elapsedtime,
-                {'suite': result.parent.name if hasattr(result, 'parent') else 'unknown', 'status': result.status}
+            self.metrics["tests_total"].add(
+                1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
             )
-            
+
+            if result.status == "PASS":
+                self.metrics["tests_passed"].add(
+                    1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
+                )
+            elif result.status == "FAIL":
+                self.metrics["tests_failed"].add(
+                    1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
+                )
+                # Add tags dimension for failure analysis
+                if hasattr(result, "tags") and result.tags:
+                    for tag in list(result.tags)[:5]:  # Limit to 5 tags
+                        self.metrics["tests_failed"].add(1, {"tag": str(tag)})
+            elif result.status == "SKIP":
+                self.metrics["tests_skipped"].add(
+                    1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
+                )
+
+            # Record test duration
+            self.metrics["test_duration"].record(
+                result.elapsedtime,
+                {
+                    "suite": result.parent.name if hasattr(result, "parent") else "unknown",
+                    "status": result.status,
+                },
+            )
+
         except Exception as e:
             print(f"TracingListener error in end_test: {e}")
 
@@ -435,14 +500,18 @@ class TracingListener:
                 if result.status == "FAIL":
                     SpanBuilder.add_error_event(span, result)
                 span.end()
-            
+
             # Emit keyword metrics
-            self.metrics['keywords_executed'].add(1, {'type': data.type})
-            self.metrics['keyword_duration'].record(
+            self.metrics["keywords_executed"].add(1, {"type": data.type})
+            self.metrics["keyword_duration"].record(
                 result.elapsedtime,
-                {'keyword': data.name[:50], 'type': data.type, 'status': result.status}  # Limit name length
+                {
+                    "keyword": data.name[:50],
+                    "type": data.type,
+                    "status": result.status,
+                },  # Limit name length
             )
-            
+
         except Exception as e:
             print(f"TracingListener error in end_keyword: {e}")
 
@@ -453,15 +522,18 @@ class TracingListener:
                 span = self.span_stack.pop()
                 span.end()
             trace.get_tracer_provider().force_flush()
-            
+            if self._trace_file:
+                self._trace_file.close()
+                self._trace_file = None
+
             # Flush logs if enabled
             if self.logger_provider:
                 self.logger_provider.force_flush()
-            
+
             # Flush metrics
             if self.meter_provider:
                 self.meter_provider.force_flush()
-                
+
         except Exception as e:
             print(f"TracingListener error in close: {e}")
 
@@ -469,7 +541,7 @@ class TracingListener:
         """Capture log messages and send to logs API."""
         if self._in_log_message:
             return  # Prevent recursion
-        
+
         self._in_log_message = True
         try:
             if not self.config.capture_logs or not self.logger:
@@ -503,7 +575,7 @@ class TracingListener:
             log_context = None
             if self.span_stack:
                 # Use the current span's context
-                from opentelemetry import context
+
                 log_context = trace.set_span_in_context(self.span_stack[-1])
 
             # Emit log using logger API
@@ -514,7 +586,7 @@ class TracingListener:
                 context=log_context,
                 attributes={
                     "rf.log.level": message.level,
-                }
+                },
             )
 
         except RecursionError:

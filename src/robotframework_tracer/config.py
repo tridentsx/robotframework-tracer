@@ -31,6 +31,12 @@ class TracerConfig:
         self.span_prefix_style = self._get_config(
             "span_prefix_style", kwargs, "RF_TRACER_SPAN_PREFIX_STYLE", "none"
         ).lower()
+        self.trace_output_file = self._get_config(
+            "trace_output_file", kwargs, "RF_TRACER_OUTPUT_FILE", ""
+        )
+        self.trace_output_format = self._get_config(
+            "trace_output_format", kwargs, "RF_TRACER_OUTPUT_FORMAT", "json"
+        ).lower()
 
     def _get_config(self, key, kwargs, env_var, default):
         """Get configuration value with precedence: kwargs > env > default."""

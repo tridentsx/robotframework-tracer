@@ -53,6 +53,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - W3C Trace Context compliant — reads standard `TRACEPARENT` and optional `TRACESTATE` env vars
 - Documentation for parent trace context (`docs/trace-propagation.md`, `docs/configuration.md`)
 - 5 new unit tests for parent context extraction and propagation
+- **Local trace output file** — write spans as OTLP-compatible JSON to a local file alongside OTLP export
+- `RF_TRACER_OUTPUT_FILE` env var / `trace_output_file` listener arg
+- `RF_TRACER_OUTPUT_FORMAT` env var — `json` (default) or `gz` for gzip-compressed output
+- `auto` mode generates filename from suite name + trace ID (e.g. `diverse_suite_4bf92f35_traces.json`)
+- File is overwritten on each run
+- 28 new unit tests for trace output file feature (92% total coverage)
 
 ### Changed
 - `SpanBuilder.create_suite_span()` accepts optional `parent_context` parameter

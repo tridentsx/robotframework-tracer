@@ -20,9 +20,13 @@ Robot Framework Test Execution
          ↓
    OpenTelemetry SDK
          ↓
-  OTLP Exporter (gRPC/HTTP)
+  ┌──────────────────────────────┐
+  │  OTLP Exporter (gRPC/HTTP)  │
+  │  OTLP JSON File Exporter    │  ← optional, via RF_TRACER_OUTPUT_FILE
+  └──────────────────────────────┘
          ↓
   Tracing Backend (Jaeger/Tempo/etc)
+  or local .json / .json.gz file
 ```
 
 ### Span Hierarchy
@@ -370,6 +374,10 @@ export RF_TRACER_SAMPLE_RATE=1.0
 # Parent trace context (set by CI pipeline or wrapper script)
 export TRACEPARENT=00-<trace-id>-<span-id>-01
 export TRACESTATE=vendor=value          # optional
+
+# Local trace output file (OTLP JSON)
+export RF_TRACER_OUTPUT_FILE=auto       # or explicit path
+export RF_TRACER_OUTPUT_FORMAT=json     # or gz
 ```
 
 ### Configuration File (future)
@@ -513,7 +521,8 @@ sample_rate: 1.0
 ## Future Enhancements
 
 1. ~~**Trace Context Propagation**: Inject trace context into HTTP requests~~ ✅ Implemented (TRACEPARENT/TRACESTATE)
-2. **Custom Instrumentation**: API for custom spans in test libraries
+2. ~~**Local Trace Output**: Write spans to local file for offline analysis~~ ✅ Implemented (RF_TRACER_OUTPUT_FILE)
+3. **Custom Instrumentation**: API for custom spans in test libraries
 3. **Metrics Integration**: Export RF metrics alongside traces
 4. **Dashboard Templates**: Pre-built Grafana dashboards
 5. **CI/CD Integration**: GitHub Actions, GitLab CI examples
