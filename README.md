@@ -4,14 +4,15 @@ OpenTelemetry distributed tracing integration for Robot Framework test execution
 
 ## What is this?
 
-`robotframework-tracer` is a Robot Framework listener plugin that automatically creates distributed traces for your test execution using OpenTelemetry. It captures the complete test hierarchy (suites → tests → keywords) as spans and exports them to any OpenTelemetry-compatible backend like Jaeger, Grafana Tempo, or Zipkin.
+`robotframework-tracer` is a Robot Framework listener plugin that automatically creates distributed traces, logs, and metrics for your test execution using OpenTelemetry. It captures the complete test hierarchy (suites → tests → keywords) as spans and exports them to any OpenTelemetry-compatible backend like Jaeger, Grafana Tempo, SigNoz, or Zipkin.
 
 This enables you to:
 - **Visualize test execution flow** with detailed timing information
-- **Debug test failures** by examining the complete execution trace
+- **Debug test failures** by examining the complete execution trace with correlated logs
 - **Analyze performance** and identify slow keywords or tests
+- **Monitor test health** with metrics dashboards and alerting
 - **Correlate tests with application traces** in distributed systems
-- **Monitor test execution** across CI/CD pipelines
+- **Track test trends** across CI/CD pipelines
 - **Propagate trace context** to your System Under Test (SUT)
 
 ![Robot Framework Trace Visualization](docs/robotframework-trace.jpg)
@@ -22,15 +23,21 @@ The tracer implements the Robot Framework Listener v3 API and creates OpenTeleme
 
 ```
 Suite Span (root)
+├── Suite Setup (SETUP span)
 ├── Test Case Span
 │   ├── Keyword Span
 │   │   └── Nested Keyword Span
 │   └── Keyword Span
-└── Test Case Span
-    └── Keyword Span
+├── Test Case Span
+│   └── Keyword Span
+└── Suite Teardown (TEARDOWN span)
 ```
 
 Each span includes rich metadata: test names, tags, status (PASS/FAIL), timing, arguments, and error details.
+
+**Additionally:**
+- **Logs** are sent via OpenTelemetry Logs API with trace correlation
+- **Metrics** are automatically emitted for test execution analysis
 
 ## Installation
 
@@ -189,7 +196,7 @@ robot --listener robotframework_tracer.TracingListener tests/
 | `span_prefix_style` | `none` | Span prefix style: `none`, `text`, `emoji` |
 | `capture_arguments` | `true` | Capture keyword arguments |
 | `max_arg_length` | `200` | Max length for arguments |
-| `capture_logs` | `false` | Capture log messages as events |
+| `capture_logs` | `false` | Capture log messages via Logs API |
 | `log_level` | `INFO` | Minimum log level (DEBUG, INFO, WARN, ERROR) |
 | `max_log_length` | `500` | Max length for log messages |
 | `sample_rate` | `1.0` | Sampling rate (0.0-1.0, 1.0 = no sampling) |
@@ -217,6 +224,55 @@ Each span includes relevant Robot Framework metadata:
 - `rf.keyword.library` - Library name
 - `rf.keyword.args` - Arguments (if enabled)
 - `rf.status` - PASS/FAIL
+
+## Log Capture
+
+When `capture_logs=true`, Robot Framework log messages are sent to the OpenTelemetry Logs API and automatically correlated with traces:
+
+**Log Attributes:**
+- `body` - Log message text
+- `severity_text` - Log level (INFO, WARN, ERROR, FAIL)
+- `severity_number` - Numeric severity (9=INFO, 13=WARN, 17=ERROR, 21=FAIL)
+- `trace_id` - Correlated trace ID
+- `span_id` - Correlated span ID (keyword/test that generated the log)
+- `rf.log.level` - Original Robot Framework log level
+
+**Endpoints:**
+- Traces: `/v1/traces` (OTLP)
+- Logs: `/v1/logs` (OTLP)
+- Metrics: `/v1/metrics` (OTLP)
+
+Logs appear in your observability backend's Logs UI with full trace correlation, enabling you to:
+- Jump from log → trace
+- Jump from trace → related logs
+- Filter logs by trace ID
+- View logs in context of test execution
+
+## Metrics
+
+The tracer automatically emits OpenTelemetry metrics for test execution analysis:
+
+**Test Metrics:**
+- `rf.tests.total` - Total tests executed (with suite dimension)
+- `rf.tests.passed` - Tests that passed
+- `rf.tests.failed` - Tests that failed (with suite and tag dimensions)
+- `rf.tests.skipped` - Tests that were skipped
+- `rf.test.duration` - Test execution time histogram (with suite and status dimensions)
+
+**Suite Metrics:**
+- `rf.suite.duration` - Suite execution time histogram (with suite and status dimensions)
+
+**Keyword Metrics:**
+- `rf.keywords.executed` - Total keywords executed (with type dimension)
+- `rf.keyword.duration` - Keyword execution time histogram (with keyword, type, and status dimensions)
+
+Metrics enable:
+- **Dashboards** - Visualize test health and trends over time
+- **Alerting** - Alert when pass rate drops or execution time increases
+- **Performance Analysis** - Track test execution time trends
+- **Failure Analysis** - Group failures by suite or tag
+
+Metrics are sent to `/v1/metrics` endpoint and share the same service name and resource attributes as traces for correlation.
 
 ## Supported Backends
 
@@ -262,7 +318,14 @@ Apache License 2.0 - See [docs/LICENSE](docs/LICENSE) for details.
 
 ## Status
 
-**Current Version:** v0.2.0  
-**Status:** Production-ready with trace propagation
+**Current Version:** v0.4.0  
+**Status:** Production-ready with full observability (traces, logs, metrics)
 
-Core functionality is complete and tested. See [docs/CHANGELOG.md](docs/CHANGELOG.md) for version history and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the development roadmap.
+**Features:**
+- ✅ Distributed tracing with parent-child span relationships
+- ✅ Log capture via OpenTelemetry Logs API with trace correlation
+- ✅ Metrics emission for test execution analysis and monitoring
+- ✅ Trace context propagation (inbound via TRACEPARENT, outbound to SUT)
+- ✅ Support for parallel execution (pabot)
+
+See [docs/CHANGELOG.md](docs/CHANGELOG.md) for version history and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the development roadmap.

@@ -70,12 +70,15 @@ class SpanBuilder:
         return span
 
     @staticmethod
-    def create_test_span(tracer, data, result, parent_context, prefix_style="none"):
-        """Create child span for test case."""
+    def create_test_span(tracer, data, result, parent_context=None, prefix_style="none"):
+        """Create child span for test case.
+        
+        Note: parent_context is deprecated. Use trace.use_span() before calling this.
+        """
         attrs = AttributeExtractor.from_test(data, result)
         name = SpanBuilder._add_prefix(data.name, "TEST", prefix_style)
         span = tracer.start_span(
-            name, context=parent_context, kind=trace.SpanKind.INTERNAL, attributes=attrs
+            name, kind=trace.SpanKind.INTERNAL, attributes=attrs
         )
         return span
 
@@ -106,7 +109,7 @@ class SpanBuilder:
         kw_name = SpanBuilder._add_prefix(kw_name, span_type, prefix_style)
 
         span = tracer.start_span(
-            kw_name, context=parent_context, kind=trace.SpanKind.INTERNAL, attributes=attrs
+            kw_name, kind=trace.SpanKind.INTERNAL, attributes=attrs
         )
         return span
 
