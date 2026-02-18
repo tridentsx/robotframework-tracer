@@ -30,6 +30,36 @@ def test_create_suite_span():
     assert call_args[0][0] == "Test Suite"
 
 
+def test_create_suite_span_with_parent_context():
+    """Test creating a suite span with external parent context."""
+    from opentelemetry.context import Context
+
+    tracer = Mock()
+    mock_span = Mock()
+    tracer.start_span.return_value = mock_span
+
+    data = Mock()
+    data.name = "Test Suite"
+    data.source = "/path/to/suite.robot"
+    data.metadata = {}
+
+    result = Mock()
+    result.id = "s1"
+    result.starttime = None
+    result.endtime = None
+
+    # Use a real Context object so baggage operations work
+    parent_context = Context()
+
+    span = SpanBuilder.create_suite_span(tracer, data, result, parent_context=parent_context)
+
+    assert span == mock_span
+    tracer.start_span.assert_called_once()
+    call_args = tracer.start_span.call_args
+    # Context should not be None when parent_context is provided
+    assert call_args.kwargs.get("context") is not None or call_args[1].get("context") is not None
+
+
 def test_create_test_span():
     """Test creating a test span."""
     tracer = Mock()

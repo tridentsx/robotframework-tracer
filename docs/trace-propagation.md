@@ -1,8 +1,68 @@
 # Trace Context Propagation
 
-The `robotframework-tracer` automatically makes trace context available as Robot Framework variables, enabling you to propagate distributed tracing to your System Under Test (SUT) across any protocol.
+The `robotframework-tracer` supports both inbound and outbound trace context propagation.
 
-## Available Variables
+## Inbound: Inheriting Parent Trace Context
+
+When the `TRACEPARENT` environment variable is set, the listener automatically makes the suite span a child of the external parent trace. This follows the [W3C Trace Context](https://www.w3.org/TR/trace-context/) standard.
+
+### Use Cases
+
+- **CI/CD pipelines**: Correlate test execution with pipeline traces
+- **Parallel execution (pabot)**: A wrapper script creates a parent span and sets `TRACEPARENT` for worker processes, producing a unified trace across all parallel workers
+- **Nested orchestration**: Any parent process that sets `TRACEPARENT` before invoking Robot Framework
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TRACEPARENT` | Yes | W3C traceparent header (e.g. `00-{trace_id}-{span_id}-01`) |
+| `TRACESTATE` | No | W3C tracestate header for vendor-specific data |
+
+### Example: Pabot with Unified Traces
+
+```python
+# trace_wrapper.py - creates parent span for pabot workers
+from opentelemetry import trace
+from opentelemetry.propagate import inject
+import subprocess, os
+
+tracer = trace.get_tracer(__name__)
+
+with tracer.start_as_current_span("Pabot Parallel Execution") as span:
+    headers = {}
+    inject(headers)
+
+    env = os.environ.copy()
+    env["TRACEPARENT"] = headers["traceparent"]
+
+    subprocess.run(["pabot", "--processes", "4", "--listener",
+        "robotframework_tracer.TracingListener", "tests/"], env=env)
+```
+
+This produces a trace like:
+```
+Pabot Parallel Execution
+├── Diverse Suite (worker 1)
+│   ├── TC01 - Fibonacci...
+│   └── TC02 - Nested Keywords...
+├── Diverse Suite (worker 2)
+│   ├── TC03 - String Pattern...
+│   └── TC04 - Dictionary...
+└── Diverse Suite (worker 3)
+    ├── TC05 - Date And Time...
+    └── TC06 - Nested Loop...
+```
+
+### Example: CI Pipeline
+
+```bash
+# In your CI script, export TRACEPARENT from the pipeline's trace context
+export TRACEPARENT="00-$(openssl rand -hex 16)-$(openssl rand -hex 8)-01"
+robot --listener robotframework_tracer.TracingListener tests/
+```
+
+## Outbound: Propagating Context to Your SUT
 
 When a test starts, the following variables are automatically set:
 

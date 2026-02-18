@@ -171,7 +171,13 @@ def test_parse_listener_args_multiple_options_with_url():
     from robotframework_tracer.listener import TracingListener
 
     # RF splits 'endpoint=http://jaeger:4318/v1/traces:service_name=api-tests:capture_logs=true'
-    args = ("endpoint=http", "//jaeger", "4318/v1/traces", "service_name=api-tests", "capture_logs=true")
+    args = (
+        "endpoint=http",
+        "//jaeger",
+        "4318/v1/traces",
+        "service_name=api-tests",
+        "capture_logs=true",
+    )
     result = TracingListener._parse_listener_args(args)
 
     assert result["endpoint"] == "http://jaeger:4318/v1/traces"
@@ -188,3 +194,75 @@ def test_parse_listener_args_https_url():
     result = TracingListener._parse_listener_args(args)
 
     assert result["endpoint"] == "https://tempo.example.com:443/v1/traces"
+
+
+@patch("robotframework_tracer.listener.HTTPExporter")
+@patch("robotframework_tracer.listener.TracerProvider")
+@patch("robotframework_tracer.listener.trace")
+def test_extract_parent_context_from_traceparent(
+    mock_trace, mock_provider, mock_exporter, monkeypatch
+):
+    """Test that TRACEPARENT env var is used to create parent context."""
+    monkeypatch.setenv("TRACEPARENT", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+
+    listener = TracingListener()
+
+    assert listener.parent_context is not None
+
+
+@patch("robotframework_tracer.listener.HTTPExporter")
+@patch("robotframework_tracer.listener.TracerProvider")
+@patch("robotframework_tracer.listener.trace")
+def test_extract_parent_context_with_tracestate(
+    mock_trace, mock_provider, mock_exporter, monkeypatch
+):
+    """Test that TRACESTATE env var is included in parent context."""
+    monkeypatch.setenv("TRACEPARENT", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+    monkeypatch.setenv("TRACESTATE", "vendor1=value1")
+
+    listener = TracingListener()
+
+    assert listener.parent_context is not None
+
+
+@patch("robotframework_tracer.listener.HTTPExporter")
+@patch("robotframework_tracer.listener.TracerProvider")
+@patch("robotframework_tracer.listener.trace")
+def test_no_parent_context_when_traceparent_absent(
+    mock_trace, mock_provider, mock_exporter, monkeypatch
+):
+    """Test that parent_context is None when TRACEPARENT is not set."""
+    monkeypatch.delenv("TRACEPARENT", raising=False)
+
+    listener = TracingListener()
+
+    assert listener.parent_context is None
+
+
+@patch("robotframework_tracer.listener.HTTPExporter")
+@patch("robotframework_tracer.listener.TracerProvider")
+@patch("robotframework_tracer.listener.trace")
+def test_start_suite_passes_parent_context(mock_trace, mock_provider, mock_exporter, monkeypatch):
+    """Test that start_suite passes parent_context to SpanBuilder."""
+    monkeypatch.setenv("TRACEPARENT", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+
+    listener = TracingListener()
+    mock_span = Mock()
+    listener.tracer = Mock()
+    listener.tracer.start_span.return_value = mock_span
+
+    data = Mock()
+    data.name = "Test Suite"
+    data.source = "/path/to/suite.robot"
+    data.metadata = {}
+
+    result = Mock()
+    result.id = "s1"
+    result.starttime = None
+    result.endtime = None
+
+    listener.start_suite(data, result)
+
+    # Verify the suite span was created with a context (not None)
+    call_args = listener.tracer.start_span.call_args
+    assert call_args.kwargs.get("context") is not None or call_args[1].get("context") is not None

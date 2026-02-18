@@ -94,6 +94,27 @@ Open http://localhost:16686 in your browser to see your test traces in Jaeger UI
 
 ## Trace Context Propagation
 
+The tracer supports two forms of trace context propagation:
+
+### Inheriting Parent Context (Inbound)
+
+When the `TRACEPARENT` environment variable is set (following the [W3C Trace Context](https://www.w3.org/TR/trace-context/) standard), the suite span automatically becomes a child of the external parent trace. This enables:
+
+- **CI/CD correlation**: A pipeline step creates a parent span and exports `TRACEPARENT` before running tests
+- **Parallel execution**: Tools like [pabot](https://pabot.org/) can use a wrapper script to create a parent span and propagate context to worker processes
+- **Nested orchestration**: Any process that sets `TRACEPARENT` in the environment before invoking Robot Framework
+
+```bash
+# Example: set by a CI pipeline or wrapper script
+export TRACEPARENT="00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+export TRACESTATE="vendor1=value1"  # optional
+robot --listener robotframework_tracer.TracingListener tests/
+```
+
+The suite span will appear as a child of trace `4bf92f3577b34da6a3ce929d0e0e4736` in your tracing backend.
+
+### Propagating Context to SUT (Outbound)
+
 The tracer automatically makes trace context available as Robot Framework variables for propagating to your System Under Test:
 
 ```robot

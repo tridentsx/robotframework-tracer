@@ -39,13 +39,26 @@ class SpanBuilder:
         return name
 
     @staticmethod
-    def create_suite_span(tracer, data, result, prefix_style="none"):
-        """Create root span for test suite."""
+    def create_suite_span(tracer, data, result, prefix_style="none", parent_context=None):
+        """Create root span for test suite.
+
+        Args:
+            tracer: OpenTelemetry tracer instance.
+            data: Robot Framework suite data object.
+            result: Robot Framework suite result object.
+            prefix_style: Span name prefix style (none, text, emoji).
+            parent_context: Optional parent context from W3C TRACEPARENT env var.
+                When provided, the suite span becomes a child of the external parent,
+                enabling trace correlation with CI pipelines or parallel runners.
+        """
         attrs = AttributeExtractor.from_suite(data, result)
         name = SpanBuilder._add_prefix(data.name, "SUITE", prefix_style)
 
-        # Create context with baggage
-        ctx = baggage.set_baggage("rf.suite.id", result.id)
+        # Start from parent context if provided, otherwise create a new root
+        ctx = parent_context
+
+        # Add baggage
+        ctx = baggage.set_baggage("rf.suite.id", result.id, ctx)
         ctx = baggage.set_baggage("rf.version", robot.version.get_version(), ctx)
 
         # Add suite metadata to baggage (limit to avoid too much data)
