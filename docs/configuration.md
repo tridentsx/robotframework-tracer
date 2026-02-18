@@ -79,8 +79,8 @@ Due to Robot Framework listener argument parsing limitations with URLs, environm
 #### `RF_TRACER_CAPTURE_LOGS`
 - **Type**: Boolean
 - **Default**: `false`
-- **Description**: Capture log messages as span events
-- **Note**: Feature in Phase 3
+- **Description**: Capture log messages via OpenTelemetry Logs API
+- **Note**: Logs are sent to `/v1/logs` endpoint with trace correlation
 
 ### Sampling
 
