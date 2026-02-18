@@ -78,8 +78,13 @@ robotframework-tracer/
 │       ├── span_builder.py       # Span creation logic
 │       ├── config.py             # Configuration management
 │       ├── attributes.py         # Attribute mapping/extraction
-│       └── version.py
-│
+│       ├── output_filter.py      # Output filter for trace JSON files
+│       ├── version.py
+│       ├── schemas/
+│       │   └── output-filter-v1.json  # JSON Schema for filter validation
+│       └── presets/
+│           ├── full.json         # Full output preset (include all)
+│           └── minimal.json      # Minimal output preset (~30% smaller)│
 ├── tests/
 │   ├── unit/
 │   │   ├── test_listener.py
@@ -337,6 +342,7 @@ opentelemetry-api>=1.20.0
 opentelemetry-sdk>=1.20.0
 opentelemetry-exporter-otlp-proto-http>=1.20.0
 opentelemetry-exporter-otlp-proto-grpc>=1.20.0  # optional
+jsonschema>=4.0.0
 ```
 
 ### Development Dependencies
@@ -378,6 +384,7 @@ export TRACESTATE=vendor=value          # optional
 # Local trace output file (OTLP JSON)
 export RF_TRACER_OUTPUT_FILE=auto       # or explicit path
 export RF_TRACER_OUTPUT_FORMAT=json     # or gz
+export RF_TRACER_OUTPUT_FILTER=minimal  # or full, or path to custom .json
 ```
 
 ### Configuration File (future)

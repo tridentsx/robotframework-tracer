@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "description": "Full output — all spans, attributes, and events included",
+
+  "resource": {
+    "include_attributes": true,
+    "attribute_keys": []
+  },
+
+  "spans": {
+    "include_suites": true,
+    "include_tests": true,
+    "include_keywords": true,
+    "keyword_types": [],
+    "max_depth": null,
+    "fields": [],
+    "attributes": {
+      "include": [],
+      "exclude": []
+    },
+    "include_events": true
+  },
+
+  "scope": {
+    "include": true
+  }
+}

@@ -137,6 +137,9 @@ output.xml
 log.html
 report.html
 selenium-screenshot-*.png
+.pabotsuitenames
+*_traces.json
+*_traces.json.gz
 
 # Project specific
 *.egg-info/

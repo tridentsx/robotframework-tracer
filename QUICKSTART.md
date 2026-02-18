@@ -79,6 +79,11 @@ export RF_TRACER_OUTPUT_FILE=auto
 robot --listener robotframework_tracer.TracingListener path/to/your/tests/
 # Creates e.g. my_tests_4bf92f35_traces.json
 
+# With minimal filter (~30% smaller output)
+export RF_TRACER_OUTPUT_FILE=auto
+export RF_TRACER_OUTPUT_FILTER=minimal
+robot --listener robotframework_tracer.TracingListener path/to/your/tests/
+
 # Import the file into Jaeger (or any OTLP backend) later
 while IFS= read -r line; do
   echo "$line" | curl -s -X POST http://localhost:14318/v1/traces \

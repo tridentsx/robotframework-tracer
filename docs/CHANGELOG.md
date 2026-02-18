@@ -58,6 +58,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RF_TRACER_OUTPUT_FORMAT` env var — `json` (default) or `gz` for gzip-compressed output
 - `auto` mode generates filename from suite name + trace ID (e.g. `diverse_suite_4bf92f35_traces.json`)
 - File is overwritten on each run
+- **Output filter** — reduce trace output file size with configurable filters
+- `RF_TRACER_OUTPUT_FILTER` env var / `trace_output_filter` listener arg
+- Built-in presets: `full` (all data) and `minimal` (~30% smaller)
+- Custom filter `.json` files with JSON Schema validation (`schemas/output-filter-v1.json`)
+- Filter controls: resource attributes, span types, keyword types, max depth, span fields, attribute include/exclude globs, events, scope
+- Empty arrays and null values mean "include everything"
+- File locking (`fcntl.flock`) for safe parallel writes (pabot)
+- `jsonschema` dependency for filter validation
 - 28 new unit tests for trace output file feature (92% total coverage)
 
 ### Changed

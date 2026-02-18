@@ -128,6 +128,54 @@ Due to Robot Framework listener argument parsing limitations with URLs, environm
   - `json`: OTLP-compatible JSON (one batch per line)
   - `gz`: Gzip-compressed OTLP JSON (e.g. `diverse_suite_4bf92f35_traces.json.gz`)
 
+#### `RF_TRACER_OUTPUT_FILTER`
+- **Type**: String
+- **Default**: `` (disabled — full output)
+- **Options**: Built-in preset name (`minimal`, `full`) or path to a custom filter `.json` file
+- **Description**: Apply a filter to reduce the size of trace output files. The filter controls which resource attributes, span types, span fields, span attributes, and events are included. The filter file is validated against a JSON Schema (`schemas/output-filter-v1.json`) on load — invalid configs are rejected with warnings.
+- **Examples**:
+  - `minimal`: Built-in preset that strips events, timing attributes, and IDs (~30% smaller)
+  - `full`: Built-in preset that includes everything (same as no filter, useful as a template)
+  - `./my-filter.json`: Custom filter file
+
+**Built-in presets:**
+
+| Preset | Description |
+|--------|-------------|
+| `full` | All spans, attributes, and events included (empty arrays = include all) |
+| `minimal` | Reduced attributes, no events, no flags/kind fields |
+
+**Custom filter example:**
+
+```json
+{
+  "version": "1.0.0",
+  "description": "My custom filter",
+  "resource": {
+    "include_attributes": true,
+    "attribute_keys": ["service.name", "rf.version"]
+  },
+  "spans": {
+    "include_suites": true,
+    "include_tests": true,
+    "include_keywords": true,
+    "keyword_types": [],
+    "max_depth": null,
+    "fields": [],
+    "attributes": {
+      "include": [],
+      "exclude": ["rf.keyword.args", "rf.elapsed_time"]
+    },
+    "include_events": false
+  },
+  "scope": {
+    "include": true
+  }
+}
+```
+
+Empty arrays `[]` and `null` mean "include everything" (no filtering). See `src/robotframework_tracer/presets/full.json` for all configurable options.
+
 ## Configuration Examples
 
 ### Basic Setup
@@ -183,6 +231,11 @@ export RF_TRACER_OUTPUT_FORMAT=gz
 robot --listener robotframework_tracer.TracingListener tests/
 # Creates e.g. diverse_suite_4bf92f35_traces.json.gz
 
+# With output filter (reduce file size ~30%)
+export RF_TRACER_OUTPUT_FILE=auto
+export RF_TRACER_OUTPUT_FILTER=minimal
+robot --listener robotframework_tracer.TracingListener tests/
+
 # Or use a fixed filename (overwritten each run)
 export RF_TRACER_OUTPUT_FILE=traces.json
 robot --listener robotframework_tracer.TracingListener tests/
@@ -213,6 +266,9 @@ export RF_TRACER_CAPTURE_ARGUMENTS=true
 export RF_TRACER_MAX_ARG_LENGTH=200
 export RF_TRACER_CAPTURE_LOGS=false
 export RF_TRACER_SAMPLE_RATE=1.0
+export RF_TRACER_OUTPUT_FILE=auto
+export RF_TRACER_OUTPUT_FORMAT=json
+export RF_TRACER_OUTPUT_FILTER=minimal
 
 robot --listener robotframework_tracer.TracingListener tests/
 ```

@@ -37,6 +37,9 @@ class TracerConfig:
         self.trace_output_format = self._get_config(
             "trace_output_format", kwargs, "RF_TRACER_OUTPUT_FORMAT", "json"
         ).lower()
+        self.trace_output_filter = self._get_config(
+            "trace_output_filter", kwargs, "RF_TRACER_OUTPUT_FILTER", ""
+        )
 
     def _get_config(self, key, kwargs, env_var, default):
         """Get configuration value with precedence: kwargs > env > default."""
