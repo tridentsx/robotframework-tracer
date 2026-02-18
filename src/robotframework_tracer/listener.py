@@ -5,30 +5,28 @@ import os
 import platform
 import re
 import sys
-import time
 
 import robot
 from google.protobuf.json_format import MessageToDict
-from opentelemetry import trace
+
+# Import metrics API
+from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.common.trace_encoder import encode_spans
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as HTTPExporter
 from opentelemetry.propagate import extract, inject
+
+# Import logs API
+from opentelemetry.sdk._logs import LoggerProvider
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
 from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 from opentelemetry.semconv.resource import ResourceAttributes
-
-# Import logs API
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
-from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
-
-# Import metrics API
-from opentelemetry import metrics
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 
 from .config import TracerConfig
 from .span_builder import SpanBuilder
@@ -158,7 +156,7 @@ class TracingListener:
             self.logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
 
             # Get logger instance
-            from opentelemetry._logs import set_logger_provider, get_logger
+            from opentelemetry._logs import get_logger, set_logger_provider
 
             set_logger_provider(self.logger_provider)
             self.logger = get_logger(__name__)
@@ -577,7 +575,6 @@ class TracingListener:
             log_context = None
             if self.span_stack:
                 # Use the current span's context
-                from opentelemetry import context
 
                 log_context = trace.set_span_in_context(self.span_stack[-1])
 
