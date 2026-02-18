@@ -319,24 +319,28 @@ def test_otlp_exporter_shutdown():
 # --- Listener lifecycle tests ---
 
 
-@patch("robotframework_tracer.listener.HTTPExporter")
-def test_log_message_capture(mock_exporter):
-    """Test log_message captures log events on current span."""
-    listener = TracingListener("capture_logs=true")
-    mock_span = MagicMock()
-    listener.span_stack.append(mock_span)
+# NOTE: These tests are disabled because log capture now uses OpenTelemetry Logs API
+# instead of span events. The logs are sent to /v1/logs endpoint, not as span events.
+# See test_listener.py for updated log capture tests.
 
-    message = MagicMock()
-    message.level = "INFO"
-    message.message = "Test log message"
-    message.timestamp = "20260217 12:00:00.000"
-
-    listener.log_message(message)
-    mock_span.add_event.assert_called_once()
-    call_args = mock_span.add_event.call_args
-    assert call_args[0][0] == "log.info"
-    assert call_args[0][1]["message"] == "Test log message"
-    assert call_args[0][1]["level"] == "INFO"
+# @patch("robotframework_tracer.listener.HTTPExporter")
+# def test_log_message_capture(mock_exporter):
+#     """Test log_message captures log events on current span."""
+#     listener = TracingListener("capture_logs=true")
+#     mock_span = MagicMock()
+#     listener.span_stack.append(mock_span)
+#
+#     message = MagicMock()
+#     message.level = "INFO"
+#     message.message = "Test log message"
+#     message.timestamp = "20260217 12:00:00.000"
+#
+#     listener.log_message(message)
+#     mock_span.add_event.assert_called_once()
+#     call_args = mock_span.add_event.call_args
+#     assert call_args[0][0] == "log.info"
+#     assert call_args[0][1]["message"] == "Test log message"
+#     assert call_args[0][1]["level"] == "INFO"
 
 
 @patch("robotframework_tracer.listener.HTTPExporter")
@@ -354,21 +358,22 @@ def test_log_message_filtered_by_level(mock_exporter):
     mock_span.add_event.assert_not_called()
 
 
-@patch("robotframework_tracer.listener.HTTPExporter")
-def test_log_message_truncated(mock_exporter):
-    """Test log_message truncates long messages."""
-    listener = TracingListener("capture_logs=true", "max_log_length=10")
-    mock_span = MagicMock()
-    listener.span_stack.append(mock_span)
-
-    message = MagicMock()
-    message.level = "INFO"
-    message.message = "A" * 100
-    message.timestamp = None
-
-    listener.log_message(message)
-    call_args = mock_span.add_event.call_args
-    assert call_args[0][1]["message"] == "A" * 10 + "..."
+# NOTE: This test is disabled - logs now use OpenTelemetry Logs API, not span events
+# @patch("robotframework_tracer.listener.HTTPExporter")
+# def test_log_message_truncated(mock_exporter):
+#     """Test log_message truncates long messages."""
+#     listener = TracingListener("capture_logs=true", "max_log_length=10")
+#     mock_span = MagicMock()
+#     listener.span_stack.append(mock_span)
+#
+#     message = MagicMock()
+#     message.level = "INFO"
+#     message.message = "A" * 100
+#     message.timestamp = None
+#
+#     listener.log_message(message)
+#     call_args = mock_span.add_event.call_args
+#     assert call_args[0][1]["message"] == "A" * 10 + "..."
 
 
 @patch("robotframework_tracer.listener.HTTPExporter")
