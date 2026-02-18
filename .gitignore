@@ -142,6 +142,7 @@ selenium-screenshot-*.png
 *.egg-info/
 .rf-tracer.yml
 .rf-tracer.json
+.otel_config
 
 # Local dev/test sandbox
 local/

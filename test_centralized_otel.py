@@ -1,20 +1,35 @@
 #!/usr/bin/env python3
 """
-Test script to send traces to centralized OTel observability stack at Ericsson.
+Test script to send traces to centralized OTel observability stack.
 
-This script runs Robot Framework tests with the tracer listener and sends
-traces to the centralized OTLP endpoint. It handles SSL verification for
-self-signed certificates.
-
-Endpoints tested:
-- HTTPS: https://your-otel-endpoint.com/v1/traces
+Configuration:
+- Set OTEL_ENDPOINT environment variable, or
+- Create .otel_config with endpoint URL
 """
 import os
 import sys
 import urllib3
+from pathlib import Path
 
 # Disable SSL warnings for self-signed certs
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Load endpoint from env var or config file
+endpoint = os.getenv('OTEL_ENDPOINT')
+if not endpoint:
+    config_file = Path(__file__).parent / '.otel_config'
+    if config_file.exists():
+        endpoint = config_file.read_text().strip()
+    else:
+        print("ERROR: No endpoint configured!")
+        print("Set OTEL_ENDPOINT env var or create .otel_config file with endpoint URL")
+        sys.exit(1)
+
+# Ensure endpoint has /v1/traces
+if not endpoint.endswith('/v1/traces'):
+    endpoint = endpoint.rstrip('/') + '/v1/traces'
+
+print(f"Using endpoint: {endpoint}")
 
 # Monkey patch requests to disable SSL verification for self-signed certs
 import requests
@@ -35,12 +50,12 @@ print("=" * 60)
 # Test: HTTPS endpoint
 print("\nTest: OTLP HTTPS endpoint with log capture")
 print("-" * 30)
-print("Endpoint: https://your-otel-endpoint.com/v1/traces")
+print(f"Endpoint: {endpoint}")
 print("Service:  robotframework-tracer-test")
 print("Logs:     ENABLED (level: INFO)")
 print()
 
-os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://your-otel-endpoint.com/v1/traces"
+os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = endpoint
 os.environ["OTEL_SERVICE_NAME"] = "robotframework-tracer-test"
 
 result = run(
@@ -52,9 +67,9 @@ result = run(
 )
 
 print(f"\n✓ Test completed (exit code: {result})")
-print("  Traces sent to:  https://your-otel-endpoint.com/v1/traces")
-print("  Logs sent to:    https://your-otel-endpoint.com/v1/logs")
-print("  Metrics sent to: https://your-otel-endpoint.com/v1/metrics")
+print(f"  Traces sent to:  {endpoint.replace('/v1/traces', '/v1/traces')}")
+print(f"  Logs sent to:    {endpoint.replace('/v1/traces', '/v1/logs')}")
+print(f"  Metrics sent to: {endpoint.replace('/v1/traces', '/v1/metrics')}")
 print("  Service name: robotframework-tracer-test")
 print("\nCheck your observability UI for the traces!")
 print("\nExpected spans:")
