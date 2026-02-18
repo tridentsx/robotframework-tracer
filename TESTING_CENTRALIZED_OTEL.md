@@ -6,12 +6,12 @@ This directory contains tests configured to send traces to the centralized OpenT
 
 **OTLP HTTP (HTTPS):**
 ```
-https://otel.hall035.rnd.gic.ericsson.se/v1/traces
+https://your-otel-endpoint.com/v1/traces
 ```
 
 **OTLP gRPC:**
 ```
-otel-grpc.hall035.rnd.gic.ericsson.se:80 (insecure)
+your-otel-grpc-endpoint.com:443 (with TLS)
 ```
 
 ## Running Tests
@@ -26,7 +26,7 @@ examples/venv/bin/python3 test_centralized_otel.py
 ### Manual Test with Robot
 ```bash
 # Set environment variables
-export OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.hall035.rnd.gic.ericsson.se/v1/traces
+export OTEL_EXPORTER_OTLP_ENDPOINT=https://your-otel-endpoint.com/v1/traces
 export OTEL_SERVICE_NAME=my-robot-tests
 
 # Run tests with log capture

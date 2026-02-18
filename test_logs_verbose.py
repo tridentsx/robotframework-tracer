@@ -25,7 +25,7 @@ from robot import run
 print("Testing logs export to SigNoz")
 print("=" * 60)
 
-os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://otel.hall035.rnd.gic.ericsson.se/v1/traces"
+os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://your-otel-endpoint.com/v1/traces"
 os.environ["OTEL_SERVICE_NAME"] = "robotframework-tracer-test"
 
 # Enable Python logging to see OTel errors

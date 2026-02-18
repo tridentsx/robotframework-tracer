@@ -7,7 +7,7 @@ traces to the centralized OTLP endpoint. It handles SSL verification for
 self-signed certificates.
 
 Endpoints tested:
-- HTTPS: https://otel.hall035.rnd.gic.ericsson.se/v1/traces
+- HTTPS: https://your-otel-endpoint.com/v1/traces
 """
 import os
 import sys
@@ -35,12 +35,12 @@ print("=" * 60)
 # Test: HTTPS endpoint
 print("\nTest: OTLP HTTPS endpoint with log capture")
 print("-" * 30)
-print("Endpoint: https://otel.hall035.rnd.gic.ericsson.se/v1/traces")
+print("Endpoint: https://your-otel-endpoint.com/v1/traces")
 print("Service:  robotframework-tracer-test")
 print("Logs:     ENABLED (level: INFO)")
 print()
 
-os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://otel.hall035.rnd.gic.ericsson.se/v1/traces"
+os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://your-otel-endpoint.com/v1/traces"
 os.environ["OTEL_SERVICE_NAME"] = "robotframework-tracer-test"
 
 result = run(
@@ -52,9 +52,9 @@ result = run(
 )
 
 print(f"\n✓ Test completed (exit code: {result})")
-print("  Traces sent to:  https://otel.hall035.rnd.gic.ericsson.se/v1/traces")
-print("  Logs sent to:    https://otel.hall035.rnd.gic.ericsson.se/v1/logs")
-print("  Metrics sent to: https://otel.hall035.rnd.gic.ericsson.se/v1/metrics")
+print("  Traces sent to:  https://your-otel-endpoint.com/v1/traces")
+print("  Logs sent to:    https://your-otel-endpoint.com/v1/logs")
+print("  Metrics sent to: https://your-otel-endpoint.com/v1/metrics")
 print("  Service name: robotframework-tracer-test")
 print("\nCheck your observability UI for the traces!")
 print("\nExpected spans:")
