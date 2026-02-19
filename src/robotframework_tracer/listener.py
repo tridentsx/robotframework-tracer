@@ -6,6 +6,25 @@ import platform
 import re
 import sys
 
+# Platform-specific file locking (Unix only, Windows skips locking)
+if sys.platform != "win32":
+    import fcntl
+
+    def _lock_file(fd):
+        fcntl.flock(fd, fcntl.LOCK_EX)
+
+    def _unlock_file(fd):
+        fcntl.flock(fd, fcntl.LOCK_UN)
+
+else:
+    # Windows: skip file locking (msvcrt.locking is too finicky for this use case)
+    def _lock_file(fd):
+        pass
+
+    def _unlock_file(fd):
+        pass
+
+
 import robot
 from google.protobuf.json_format import MessageToDict
 
@@ -29,6 +48,7 @@ from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 from opentelemetry.semconv.resource import ResourceAttributes
 
 from .config import TracerConfig
+from .output_filter import apply_filter, load_filter
 from .span_builder import SpanBuilder
 
 # Try to import Robot Framework BuiltIn library for variable setting
@@ -53,8 +73,9 @@ except ImportError:
 class _OtlpJsonFileExporter(SpanExporter):
     """Write spans as OTLP-compatible JSON — one ExportTraceServiceRequest per batch."""
 
-    def __init__(self, out):
+    def __init__(self, out, output_filter=None):
         self._out = out
+        self._filter = output_filter
 
     @staticmethod
     def _fix_byte_ids(d):
@@ -71,8 +92,15 @@ class _OtlpJsonFileExporter(SpanExporter):
         pb = encode_spans(spans)
         d = MessageToDict(pb, preserving_proto_field_name=True)
         d = self._fix_byte_ids(d)
-        self._out.write(json.dumps(d, separators=(",", ":")) + "\n")
-        self._out.flush()
+        d = apply_filter(d, self._filter)
+        line = json.dumps(d, separators=(",", ":")) + "\n"
+        fd = self._out.fileno()
+        _lock_file(fd)
+        try:
+            self._out.write(line)
+            self._out.flush()
+        finally:
+            _unlock_file(fd)
         return SpanExportResult.SUCCESS
 
     def shutdown(self):
@@ -282,13 +310,16 @@ class TracingListener:
         try:
             if self.config.trace_output_format == "gz":
                 filepath = filepath + ".gz" if not filepath.endswith(".gz") else filepath
-                self._trace_file = gzip.open(filepath, "wt")
+                self._trace_file = gzip.open(filepath, "at")
             else:
-                self._trace_file = open(filepath, "w")
-            file_exporter = _OtlpJsonFileExporter(out=self._trace_file)
+                self._trace_file = open(filepath, "a")
+            output_filter = load_filter(self.config.trace_output_filter)
+            file_exporter = _OtlpJsonFileExporter(out=self._trace_file, output_filter=output_filter)
             self._file_processor = BatchSpanProcessor(file_exporter)
             trace.get_tracer_provider().add_span_processor(self._file_processor)
             print(f"Trace output file: {filepath}")
+            if output_filter:
+                print(f"Trace output filter: {self.config.trace_output_filter}")
         except Exception as e:
             print(f"Warning: Failed to open trace output file '{filepath}': {e}")
             self._trace_file = None

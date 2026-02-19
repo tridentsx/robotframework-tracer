@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/tridentsx/robotframework-tracer/schemas/output-filter-v1.json",
+  "title": "Output Filter Configuration",
+  "description": "Schema for robotframework-tracer output filter files (v1.x)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "Schema version (must be 1.x.x)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of this filter"
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include_attributes": {
+          "type": "boolean",
+          "description": "Whether to include resource attributes"
+        },
+        "attribute_keys": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns for resource attribute keys to include (empty = all)"
+        }
+      }
+    },
+    "spans": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include_suites": {
+          "type": "boolean",
+          "description": "Whether to include suite spans"
+        },
+        "include_tests": {
+          "type": "boolean",
+          "description": "Whether to include test spans"
+        },
+        "include_keywords": {
+          "type": "boolean",
+          "description": "Whether to include keyword spans"
+        },
+        "keyword_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["KEYWORD", "SETUP", "TEARDOWN"]
+          },
+          "description": "Keyword types to include (empty = all)"
+        },
+        "max_depth": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Maximum span depth (null = unlimited)"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "trace_id",
+              "span_id",
+              "parent_span_id",
+              "name",
+              "kind",
+              "start_time_unix_nano",
+              "end_time_unix_nano",
+              "status",
+              "attributes",
+              "events",
+              "flags"
+            ]
+          },
+          "description": "Span fields to include (empty = all)"
+        },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "include": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Glob patterns for attribute keys to include (empty = all)"
+            },
+            "exclude": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Glob patterns for attribute keys to exclude (empty = none)"
+            }
+          }
+        },
+        "include_events": {
+          "type": "boolean",
+          "description": "Whether to include span events"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include": {
+          "type": "boolean",
+          "description": "Whether to include scope/instrumentation info"
+        }
+      }
+    }
+  }
+}

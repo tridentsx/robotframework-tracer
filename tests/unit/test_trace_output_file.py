@@ -10,6 +10,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, Sp
 
 from robotframework_tracer.config import TracerConfig
 from robotframework_tracer.listener import TracingListener, _OtlpJsonFileExporter
+from robotframework_tracer.output_filter import apply_filter
 
 # --- Config tests ---
 
@@ -194,28 +195,36 @@ def _collect_spans(fn):
     return collected
 
 
-def test_otlp_exporter_writes_valid_json():
+def _export_to_tempfile(spans, tmp_path, output_filter=None):
+    """Helper: export spans to a real temp file and return parsed JSON."""
+    filepath = str(tmp_path / "test_traces.json")
+    with open(filepath, "w") as f:
+        exporter = _OtlpJsonFileExporter(f, output_filter=output_filter)
+        result = exporter.export(spans)
+    with open(filepath) as f:
+        content = f.read().strip()
+    return result, content
+
+
+def test_otlp_exporter_writes_valid_json(tmp_path):
     """Test _OtlpJsonFileExporter writes valid OTLP JSON."""
     spans = _collect_spans(
         lambda t: t.start_span("test_span", attributes={"rf.test.name": "T1"}).end()
     )
 
-    buf = io.StringIO()
-    exporter = _OtlpJsonFileExporter(buf)
-    result = exporter.export(spans)
+    result, content = _export_to_tempfile(spans, tmp_path)
 
     assert result == SpanExportResult.SUCCESS
-    record = json.loads(buf.getvalue().strip())
+    record = json.loads(content)
     assert "resource_spans" in record
 
 
-def test_otlp_exporter_has_correct_structure():
+def test_otlp_exporter_has_correct_structure(tmp_path):
     """Test OTLP JSON has resourceSpans > scopeSpans > spans structure."""
     spans = _collect_spans(lambda t: t.start_span("my_span", attributes={"k": "v"}).end())
 
-    buf = io.StringIO()
-    _OtlpJsonFileExporter(buf).export(spans)
-    record = json.loads(buf.getvalue().strip())
+    _, content = _export_to_tempfile(spans, tmp_path)
+    record = json.loads(content)
 
     rs = record["resource_spans"]
     assert len(rs) >= 1
@@ -229,48 +238,43 @@ def test_otlp_exporter_has_correct_structure():
     assert "span_id" in span
 
 
-def test_otlp_exporter_hex_trace_ids():
+def test_otlp_exporter_hex_trace_ids(tmp_path):
     """Test that trace_id and span_id are hex strings, not base64."""
     spans = _collect_spans(lambda t: t.start_span("hex_test").end())
 
-    buf = io.StringIO()
-    _OtlpJsonFileExporter(buf).export(spans)
-    record = json.loads(buf.getvalue().strip())
+    _, content = _export_to_tempfile(spans, tmp_path)
+    record = json.loads(content)
 
     span = record["resource_spans"][0]["scope_spans"][0]["spans"][0]
-    # Hex trace_id is 32 chars, span_id is 16 chars, no 0x prefix, no base64 chars like = or /
     assert len(span["trace_id"]) == 32
     assert len(span["span_id"]) == 16
     int(span["trace_id"], 16)  # Should not raise
     int(span["span_id"], 16)  # Should not raise
 
 
-def test_otlp_exporter_attributes_format():
+def test_otlp_exporter_attributes_format(tmp_path):
     """Test attributes use OTLP key/value array format."""
     spans = _collect_spans(
         lambda t: t.start_span("attr_test", attributes={"rf.test.name": "My Test"}).end()
     )
 
-    buf = io.StringIO()
-    _OtlpJsonFileExporter(buf).export(spans)
-    record = json.loads(buf.getvalue().strip())
+    _, content = _export_to_tempfile(spans, tmp_path)
+    record = json.loads(content)
 
     span = record["resource_spans"][0]["scope_spans"][0]["spans"][0]
     attrs = span["attributes"]
-    # OTLP format: list of {"key": ..., "value": {"stringValue": ...}}
     assert isinstance(attrs, list)
     attr_dict = {a["key"]: a["value"] for a in attrs}
     assert "rf.test.name" in attr_dict
     assert attr_dict["rf.test.name"]["string_value"] == "My Test"
 
 
-def test_otlp_exporter_resource_included():
+def test_otlp_exporter_resource_included(tmp_path):
     """Test resource attributes are included in output."""
     spans = _collect_spans(lambda t: t.start_span("res_test").end())
 
-    buf = io.StringIO()
-    _OtlpJsonFileExporter(buf).export(spans)
-    record = json.loads(buf.getvalue().strip())
+    _, content = _export_to_tempfile(spans, tmp_path)
+    record = json.loads(content)
 
     resource = record["resource_spans"][0]["resource"]
     assert "attributes" in resource
@@ -278,7 +282,7 @@ def test_otlp_exporter_resource_included():
     assert "service.name" in attr_keys
 
 
-def test_otlp_exporter_parent_span_id():
+def test_otlp_exporter_parent_span_id(tmp_path):
     """Test parent_span_id is present for child spans."""
 
     def create_spans(tracer):
@@ -287,9 +291,8 @@ def test_otlp_exporter_parent_span_id():
 
     spans = _collect_spans(create_spans)
 
-    buf = io.StringIO()
-    _OtlpJsonFileExporter(buf).export(spans)
-    record = json.loads(buf.getvalue().strip())
+    _, content = _export_to_tempfile(spans, tmp_path)
+    record = json.loads(content)
 
     span_list = record["resource_spans"][0]["scope_spans"][0]["spans"]
     child = next(s for s in span_list if s["name"] == "child")
@@ -297,17 +300,15 @@ def test_otlp_exporter_parent_span_id():
     assert len(child["parent_span_id"]) == 16
 
 
-def test_otlp_exporter_compact_output():
+def test_otlp_exporter_compact_output(tmp_path):
     """Test output is compact (no extra whitespace)."""
     spans = _collect_spans(lambda t: t.start_span("compact").end())
 
-    buf = io.StringIO()
-    _OtlpJsonFileExporter(buf).export(spans)
-    line = buf.getvalue().strip()
+    _, content = _export_to_tempfile(spans, tmp_path)
     # Compact JSON should not have newlines within the record
-    assert "\n" not in line
+    assert "\n" not in content
     # Should not have "  " (indentation)
-    assert "  " not in line
+    assert "  " not in content
 
 
 def test_otlp_exporter_shutdown():
@@ -430,3 +431,325 @@ def test_keyword_setup_teardown_events(mock_exporter):
 
     listener.end_keyword(data, result)
     assert len(listener.span_stack) == 1
+
+
+# --- Output filter validation tests ---
+
+
+def test_load_filter_valid_preset():
+    """Test loading a valid built-in preset."""
+    from robotframework_tracer.output_filter import load_filter
+
+    cfg = load_filter("full")
+    assert cfg is not None
+    assert cfg["version"] == "1.0.0"
+
+
+def test_load_filter_minimal_preset():
+    """Test loading the minimal preset passes validation."""
+    from robotframework_tracer.output_filter import load_filter
+
+    cfg = load_filter("minimal")
+    assert cfg is not None
+    assert cfg["version"] == "1.0.0"
+
+
+def test_load_filter_invalid_schema(tmp_path, capsys):
+    """Test that an invalid filter file is rejected with warnings."""
+    from robotframework_tracer.output_filter import load_filter
+
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"version": "1.0.0", "spans": {"bogus_key": True}}))
+    cfg = load_filter(str(bad))
+    assert cfg is None
+    captured = capsys.readouterr()
+    assert "validation errors" in captured.out
+    assert "bogus_key" in captured.out
+
+
+def test_load_filter_invalid_type(tmp_path, capsys):
+    """Test that wrong types are caught by schema validation."""
+    from robotframework_tracer.output_filter import load_filter
+
+    bad = tmp_path / "bad_type.json"
+    bad.write_text(json.dumps({"version": "1.0.0", "spans": {"include_suites": "yes"}}))
+    cfg = load_filter(str(bad))
+    assert cfg is None
+    captured = capsys.readouterr()
+    assert "validation errors" in captured.out
+
+
+def test_load_filter_invalid_keyword_type(tmp_path, capsys):
+    """Test that invalid keyword types are caught."""
+    from robotframework_tracer.output_filter import load_filter
+
+    bad = tmp_path / "bad_kw.json"
+    bad.write_text(
+        json.dumps({"version": "1.0.0", "spans": {"keyword_types": ["KEYWORD", "INVALID"]}})
+    )
+    cfg = load_filter(str(bad))
+    assert cfg is None
+    captured = capsys.readouterr()
+    assert "validation errors" in captured.out
+
+
+def test_load_filter_unsupported_version(tmp_path, capsys):
+    """Test that version 2.x is rejected."""
+    from robotframework_tracer.output_filter import load_filter
+
+    bad = tmp_path / "v2.json"
+    bad.write_text(json.dumps({"version": "2.0.0"}))
+    cfg = load_filter(str(bad))
+    assert cfg is None
+    captured = capsys.readouterr()
+    assert "Unsupported output filter version" in captured.out
+
+
+def test_load_filter_empty_path():
+    """Test that empty path returns None."""
+    from robotframework_tracer.output_filter import load_filter
+
+    assert load_filter("") is None
+    assert load_filter(None) is None
+
+
+def test_load_filter_missing_file(capsys):
+    """Test that missing file prints warning and returns None."""
+    from robotframework_tracer.output_filter import load_filter
+
+    cfg = load_filter("/nonexistent/filter.json")
+    assert cfg is None
+    captured = capsys.readouterr()
+    assert "not found" in captured.out
+
+
+# --- Output filter apply_filter tests ---
+
+
+def _make_otlp(spans, resource_attrs=None):
+    """Build a minimal OTLP JSON dict for testing apply_filter."""
+    return {
+        "resource_spans": [
+            {
+                "resource": {
+                    "attributes": resource_attrs
+                    or [
+                        {"key": "service.name", "value": {"string_value": "rf"}},
+                        {"key": "telemetry.sdk.name", "value": {"string_value": "test"}},
+                        {"key": "host.name", "value": {"string_value": "localhost"}},
+                    ]
+                },
+                "scope_spans": [{"scope": {"name": "test"}, "spans": spans}],
+            }
+        ]
+    }
+
+
+def _suite_span(span_id="a1", parent=""):
+    return {
+        "trace_id": "abc123",
+        "span_id": span_id,
+        "parent_span_id": parent,
+        "name": "My Suite",
+        "kind": 1,
+        "start_time_unix_nano": "100",
+        "end_time_unix_nano": "200",
+        "status": {"code": 1},
+        "attributes": [{"key": "rf.suite.name", "value": {"string_value": "My Suite"}}],
+        "events": [{"name": "suite.start"}],
+    }
+
+
+def _test_span(span_id="b1", parent="a1"):
+    return {
+        "trace_id": "abc123",
+        "span_id": span_id,
+        "parent_span_id": parent,
+        "name": "Test 1",
+        "kind": 1,
+        "start_time_unix_nano": "110",
+        "end_time_unix_nano": "190",
+        "status": {"code": 1},
+        "attributes": [
+            {"key": "rf.test.name", "value": {"string_value": "Test 1"}},
+            {"key": "rf.elapsed_time", "value": {"string_value": "80"}},
+        ],
+        "events": [],
+    }
+
+
+def _kw_span(span_id="c1", parent="b1", kw_type="KEYWORD"):
+    return {
+        "trace_id": "abc123",
+        "span_id": span_id,
+        "parent_span_id": parent,
+        "name": "Log",
+        "kind": 1,
+        "start_time_unix_nano": "120",
+        "end_time_unix_nano": "130",
+        "status": {"code": 1},
+        "attributes": [
+            {"key": "rf.keyword.type", "value": {"string_value": kw_type}},
+            {"key": "rf.keyword.name", "value": {"string_value": "Log"}},
+            {"key": "rf.keyword.args", "value": {"string_value": "hello"}},
+        ],
+        "events": [{"name": "log"}],
+    }
+
+
+def test_apply_filter_none_returns_unchanged():
+    d = _make_otlp([_suite_span()])
+    result = apply_filter(d, None)
+    assert len(result["resource_spans"][0]["scope_spans"][0]["spans"]) == 1
+
+
+def test_apply_filter_exclude_suites():
+    d = _make_otlp([_suite_span(), _test_span(), _kw_span()])
+    cfg = {"version": "1.0.0", "spans": {"include_suites": False}}
+    result = apply_filter(d, cfg)
+    names = [s["name"] for s in result["resource_spans"][0]["scope_spans"][0]["spans"]]
+    assert "My Suite" not in names
+    assert "Test 1" in names
+
+
+def test_apply_filter_exclude_tests():
+    d = _make_otlp([_suite_span(), _test_span(), _kw_span()])
+    cfg = {"version": "1.0.0", "spans": {"include_tests": False}}
+    result = apply_filter(d, cfg)
+    names = [s["name"] for s in result["resource_spans"][0]["scope_spans"][0]["spans"]]
+    assert "Test 1" not in names
+    assert "My Suite" in names
+
+
+def test_apply_filter_exclude_keywords():
+    d = _make_otlp([_suite_span(), _test_span(), _kw_span()])
+    cfg = {"version": "1.0.0", "spans": {"include_keywords": False}}
+    result = apply_filter(d, cfg)
+    names = [s["name"] for s in result["resource_spans"][0]["scope_spans"][0]["spans"]]
+    assert "Log" not in names
+    assert "Test 1" in names
+
+
+def test_apply_filter_keyword_types():
+    spans = [_kw_span("c1", kw_type="KEYWORD"), _kw_span("c2", kw_type="SETUP")]
+    d = _make_otlp(spans)
+    cfg = {"version": "1.0.0", "spans": {"keyword_types": ["SETUP"]}}
+    result = apply_filter(d, cfg)
+    remaining = result["resource_spans"][0]["scope_spans"][0]["spans"]
+    assert len(remaining) == 1
+    kw_attrs = {a["key"]: a["value"]["string_value"] for a in remaining[0]["attributes"]}
+    assert kw_attrs["rf.keyword.type"] == "SETUP"
+
+
+def test_apply_filter_exclude_events():
+    d = _make_otlp([_suite_span(), _kw_span()])
+    cfg = {"version": "1.0.0", "spans": {"include_events": False}}
+    result = apply_filter(d, cfg)
+    for span in result["resource_spans"][0]["scope_spans"][0]["spans"]:
+        assert "events" not in span
+
+
+def test_apply_filter_fields():
+    d = _make_otlp([_test_span()])
+    cfg = {"version": "1.0.0", "spans": {"fields": ["trace_id", "span_id", "name", "attributes"]}}
+    result = apply_filter(d, cfg)
+    span = result["resource_spans"][0]["scope_spans"][0]["spans"][0]
+    assert "trace_id" in span
+    assert "name" in span
+    assert "kind" not in span
+    assert "start_time_unix_nano" not in span
+
+
+def test_apply_filter_attribute_exclude():
+    d = _make_otlp([_kw_span()])
+    cfg = {
+        "version": "1.0.0",
+        "spans": {"attributes": {"include": [], "exclude": ["rf.keyword.args"]}},
+    }
+    result = apply_filter(d, cfg)
+    span = result["resource_spans"][0]["scope_spans"][0]["spans"][0]
+    keys = [a["key"] for a in span["attributes"]]
+    assert "rf.keyword.args" not in keys
+    assert "rf.keyword.name" in keys
+
+
+def test_apply_filter_attribute_include():
+    d = _make_otlp([_kw_span()])
+    cfg = {
+        "version": "1.0.0",
+        "spans": {"attributes": {"include": ["rf.keyword.name"], "exclude": []}},
+    }
+    result = apply_filter(d, cfg)
+    span = result["resource_spans"][0]["scope_spans"][0]["spans"][0]
+    keys = [a["key"] for a in span["attributes"]]
+    assert keys == ["rf.keyword.name"]
+
+
+def test_apply_filter_resource_exclude_attributes():
+    d = _make_otlp([_suite_span()])
+    cfg = {"version": "1.0.0", "resource": {"include_attributes": False}}
+    result = apply_filter(d, cfg)
+    res = result["resource_spans"][0]["resource"]
+    assert "attributes" not in res
+
+
+def test_apply_filter_resource_attribute_keys():
+    d = _make_otlp([_suite_span()])
+    cfg = {
+        "version": "1.0.0",
+        "resource": {"include_attributes": True, "attribute_keys": ["service.*"]},
+    }
+    result = apply_filter(d, cfg)
+    res = result["resource_spans"][0]["resource"]
+    keys = [a["key"] for a in res["attributes"]]
+    assert keys == ["service.name"]
+
+
+def test_apply_filter_scope_exclude():
+    d = _make_otlp([_suite_span()])
+    cfg = {"version": "1.0.0", "scope": {"include": False}}
+    result = apply_filter(d, cfg)
+    ss = result["resource_spans"][0]["scope_spans"][0]
+    assert "scope" not in ss
+
+
+def test_apply_filter_max_depth():
+    spans = [
+        _suite_span("a1", ""),
+        _test_span("b1", "a1"),
+        _kw_span("c1", "b1"),
+        _kw_span("d1", "c1"),  # depth 3
+    ]
+    d = _make_otlp(spans)
+    cfg = {"version": "1.0.0", "spans": {"max_depth": 2}}
+    result = apply_filter(d, cfg)
+    ids = [s["span_id"] for s in result["resource_spans"][0]["scope_spans"][0]["spans"]]
+    assert "a1" in ids
+    assert "b1" in ids
+    assert "c1" in ids
+    assert "d1" not in ids
+
+
+def test_apply_filter_full_preset_keeps_everything():
+    """Full preset (empty arrays) should not filter anything."""
+    from robotframework_tracer.output_filter import load_filter
+
+    cfg = load_filter("full")
+    spans = [_suite_span(), _test_span(), _kw_span()]
+    d = _make_otlp(spans)
+    result = apply_filter(d, cfg)
+    assert len(result["resource_spans"][0]["scope_spans"][0]["spans"]) == 3
+
+
+def test_apply_filter_minimal_preset():
+    """Minimal preset should strip events and certain attributes."""
+    from robotframework_tracer.output_filter import load_filter
+
+    cfg = load_filter("minimal")
+    d = _make_otlp([_test_span()])
+    result = apply_filter(d, cfg)
+    span = result["resource_spans"][0]["scope_spans"][0]["spans"][0]
+    assert "events" not in span
+    keys = [a["key"] for a in span["attributes"]]
+    assert "rf.elapsed_time" not in keys
+    assert "rf.test.name" in keys

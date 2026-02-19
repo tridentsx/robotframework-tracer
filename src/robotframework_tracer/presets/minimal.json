@@ -1,0 +1,43 @@
+{
+  "version": "1.0.0",
+  "description": "Minimal output — reduced attributes, no events, no flags/kind",
+
+  "resource": {
+    "include_attributes": true,
+    "attribute_keys": ["service.name", "rf.version", "host.name"]
+  },
+
+  "spans": {
+    "include_suites": true,
+    "include_tests": true,
+    "include_keywords": true,
+    "keyword_types": ["KEYWORD", "SETUP", "TEARDOWN"],
+    "max_depth": null,
+    "fields": [
+      "trace_id",
+      "span_id",
+      "parent_span_id",
+      "name",
+      "start_time_unix_nano",
+      "end_time_unix_nano",
+      "status",
+      "attributes"
+    ],
+    "attributes": {
+      "include": ["*"],
+      "exclude": [
+        "rf.keyword.args",
+        "rf.start_time",
+        "rf.end_time",
+        "rf.elapsed_time",
+        "rf.suite.id",
+        "rf.test.id"
+      ]
+    },
+    "include_events": false
+  },
+
+  "scope": {
+    "include": true
+  }
+}
