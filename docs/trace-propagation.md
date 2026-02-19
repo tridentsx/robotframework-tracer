@@ -42,17 +42,30 @@ with tracer.start_as_current_span("Pabot Parallel Execution") as span:
 
 This produces a trace like:
 ```
-Pabot Parallel Execution
-├── Diverse Suite (worker 1)
-│   ├── TC01 - Fibonacci...
+Pabot Parallel Execution          (closed immediately — visible in trace viewer right away)
+├── Execution Started             (signal span, closed immediately)
+├── Test Starting: TC01           (signal span, visible within seconds)
+├── Test Starting: TC02           (signal span, visible within seconds)
+├── Test Starting: TC03           (signal span, visible within seconds)
+├── Long Running Suite - TC01     (suite span, appears when worker finishes)
+│   └── TC01 - Fibonacci...
+├── Long Running Suite - TC02     (suite span, appears when worker finishes)
 │   └── TC02 - Nested Keywords...
-├── Diverse Suite (worker 2)
-│   ├── TC03 - String Pattern...
-│   └── TC04 - Dictionary...
-└── Diverse Suite (worker 3)
-    ├── TC05 - Date And Time...
-    └── TC06 - Nested Loop...
+└── Execution Finished            (signal span, closed at end)
 ```
+
+> **Note:** While tests are still running, suite spans that haven't been exported yet may appear as "Missing Span" in SigNoz/Jaeger. This is normal — they are replaced with the real span names once the worker finishes and exports them.
+
+### Live Visibility
+
+When using `trace_wrapper.py` with pabot, the tracer provides live visibility into running tests:
+
+1. The wrapper creates a root span and closes it immediately so the trace appears in your backend right away
+2. Each worker emits a "Test Starting: {name}" signal span under the root when a test begins
+3. Suite spans are renamed to include the test name (e.g. "Long Running Suite - My Test")
+4. Signal spans are exported via the normal `BatchSpanProcessor` cycle (~5 seconds), no `force_flush()` overhead
+
+This means you can see which tests are running in your trace viewer within seconds, instead of waiting for the entire suite to finish.
 
 ### Example: CI Pipeline
 

@@ -14,6 +14,7 @@ This enables you to:
 - **Correlate tests with application traces** in distributed systems
 - **Track test trends** across CI/CD pipelines
 - **Propagate trace context** to your System Under Test (SUT)
+- **See running tests live** in trace viewers during pabot parallel execution
 
 ![Robot Framework Trace Visualization](docs/robotframework-trace.jpg)
 
@@ -335,5 +336,6 @@ Apache License 2.0 - See [docs/LICENSE](docs/LICENSE) for details.
 - ✅ Metrics emission for test execution analysis and monitoring
 - ✅ Trace context propagation (inbound via TRACEPARENT, outbound to SUT)
 - ✅ Support for parallel execution (pabot)
+- ✅ Live test visibility during pabot runs (signal spans + immediate root export)
 
 See [docs/CHANGELOG.md](docs/CHANGELOG.md) for version history and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the development roadmap.

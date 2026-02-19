@@ -48,6 +48,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Live test visibility for pabot runs** — "Test Starting" signal spans are emitted immediately when a test begins, appearing in trace viewers (SigNoz, Jaeger) before the test finishes
+  - Signal spans are created under the wrapper's root span context for immediate visibility
+  - Suite spans are renamed to include the test name (e.g. "Long Running Suite - My Test") for pabot runs
+  - Only active when `TRACEPARENT` is set (pabot/wrapper runs), zero overhead for normal robot execution
+- **Improved trace_wrapper.py** — root span is now closed and exported immediately so the trace appears in backends right away, instead of waiting for the entire pabot run to finish
+
+### Added
 - **Line number attributes** — `rf.test.lineno` and `rf.keyword.lineno` for source file navigation (Robot Framework 5+)
 
 ### Fixed
