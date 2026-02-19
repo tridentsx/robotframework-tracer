@@ -159,3 +159,58 @@ def test_from_test_with_template():
     attrs = AttributeExtractor.from_test(data, result)
     assert attrs[RFAttributes.TEST_TEMPLATE] == "My Template Keyword"
     assert attrs[RFAttributes.TEST_TIMEOUT] == "30s"
+
+
+def test_from_test_with_lineno():
+    """Test extracting test attributes with line number (RF 5+)."""
+    data = Mock()
+    data.name = "Test With Line"
+    data.tags = []
+    data.lineno = 42
+
+    result = Mock()
+    result.id = "t1"
+
+    attrs = AttributeExtractor.from_test(data, result)
+    assert attrs[RFAttributes.TEST_LINENO] == 42
+
+
+def test_from_test_without_lineno():
+    """Test extracting test attributes without line number (RF <5)."""
+    data = Mock(spec=["name", "tags"])  # No lineno attribute
+    data.name = "Test Without Line"
+    data.tags = []
+
+    result = Mock()
+    result.id = "t1"
+
+    attrs = AttributeExtractor.from_test(data, result)
+    assert RFAttributes.TEST_LINENO not in attrs
+
+
+def test_from_keyword_with_lineno():
+    """Test extracting keyword attributes with line number (RF 5+)."""
+    data = Mock()
+    data.name = "My Keyword"
+    data.type = "KEYWORD"
+    data.libname = "MyLib"
+    data.args = []
+    data.lineno = 15
+
+    result = Mock()
+
+    attrs = AttributeExtractor.from_keyword(data, result)
+    assert attrs[RFAttributes.KEYWORD_LINENO] == 15
+
+
+def test_from_keyword_without_lineno():
+    """Test extracting keyword attributes without line number (RF <5)."""
+    data = Mock(spec=["name", "type", "args"])  # No lineno attribute
+    data.name = "My Keyword"
+    data.type = "KEYWORD"
+    data.args = []
+
+    result = Mock()
+
+    attrs = AttributeExtractor.from_keyword(data, result)
+    assert RFAttributes.KEYWORD_LINENO not in attrs

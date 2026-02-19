@@ -48,6 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Line number attributes** — `rf.test.lineno` and `rf.keyword.lineno` for source file navigation (Robot Framework 5+)
+
+### Fixed
+- **Gzip trace output corruption with pabot** — concurrent processes no longer produce corrupt `.gz` files; each worker writes plain JSON to a process-local temp file and compresses atomically on close
+- **Trace file not closed on error** — `close()` now uses isolated try/except blocks so the trace file is always properly closed even if earlier cleanup steps fail
 - **Parent trace context support** from `TRACEPARENT`/`TRACESTATE` environment variables
 - Suite spans inherit trace context from external parent processes (CI pipelines, wrapper scripts, pabot)
 - W3C Trace Context compliant — reads standard `TRACEPARENT` and optional `TRACESTATE` env vars

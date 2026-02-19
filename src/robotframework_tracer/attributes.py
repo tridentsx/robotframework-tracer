@@ -13,12 +13,14 @@ class RFAttributes:
     TEST_TAGS = "rf.test.tags"
     TEST_TEMPLATE = "rf.test.template"
     TEST_TIMEOUT = "rf.test.timeout"
+    TEST_LINENO = "rf.test.lineno"
 
     # Keyword attributes
     KEYWORD_NAME = "rf.keyword.name"
     KEYWORD_TYPE = "rf.keyword.type"
     KEYWORD_LIBRARY = "rf.keyword.library"
     KEYWORD_ARGS = "rf.keyword.args"
+    KEYWORD_LINENO = "rf.keyword.lineno"
 
     # Result attributes
     STATUS = "rf.status"
@@ -67,6 +69,10 @@ class AttributeExtractor:
         if data.tags:
             attrs[RFAttributes.TEST_TAGS] = list(data.tags)
 
+        # Add line number if available (RF 5+)
+        if hasattr(data, "lineno") and data.lineno:
+            attrs[RFAttributes.TEST_LINENO] = data.lineno
+
         # Add test template if available
         if hasattr(data, "template") and data.template:
             attrs[RFAttributes.TEST_TEMPLATE] = str(data.template)
@@ -101,6 +107,10 @@ class AttributeExtractor:
             attrs[RFAttributes.KEYWORD_LIBRARY] = (
                 data.owner.name if hasattr(data.owner, "name") else str(data.owner)
             )
+
+        # Add line number if available (RF 5+)
+        if hasattr(data, "lineno") and data.lineno:
+            attrs[RFAttributes.KEYWORD_LINENO] = data.lineno
 
         if data.args:
             args_str = ", ".join(str(arg)[:max_arg_length] for arg in data.args[:10])
