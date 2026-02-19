@@ -123,7 +123,7 @@ Due to Robot Framework listener argument parsing limitations with URLs, environm
 - **Type**: String
 - **Default**: `json`
 - **Options**: `json`, `gz`
-- **Description**: Output format for the trace file. `gz` writes gzip-compressed output (streaming), typically ~90% smaller.
+- **Description**: Output format for the trace file. `gz` compresses the output to gzip on completion, typically ~90% smaller. Safe for parallel execution with pabot.
 - **Examples**:
   - `json`: OTLP-compatible JSON (one batch per line)
   - `gz`: Gzip-compressed OTLP JSON (e.g. `diverse_suite_4bf92f35_traces.json.gz`)

@@ -236,6 +236,7 @@ class TracingListener:
         self.parent_context = self._extract_parent_context()
         self._trace_file = None
         self._file_processor = None
+        self._gz_final_path = None
 
         # If an explicit file path is given, open it now
         if self.config.trace_output_file and self.config.trace_output_file != "auto":
@@ -306,11 +307,23 @@ class TracingListener:
         return extract(carrier)
 
     def _open_trace_file(self, filepath):
-        """Open a trace output file and attach a compact JSON exporter to the provider."""
+        """Open a trace output file and attach a compact JSON exporter to the provider.
+
+        For gz format, each process writes to its own temporary JSON file, then
+        compresses and appends to the final .gz file in close(). This avoids
+        corruption from concurrent gzip writes with pabot.
+        """
         try:
             if self.config.trace_output_format == "gz":
-                filepath = filepath + ".gz" if not filepath.endswith(".gz") else filepath
-                self._trace_file = gzip.open(filepath, "at")
+                # Ensure the final path ends with .gz
+                if not filepath.endswith(".gz"):
+                    filepath = filepath + ".gz"
+                self._gz_final_path = filepath
+                # Clean up stale .tmp files from previous crashed runs
+                self._cleanup_stale_tmp_files(filepath)
+                # Each process writes to its own temp file (PID-based)
+                json_path = f"{filepath[: -len('.gz')]}.{os.getpid()}.tmp"
+                self._trace_file = open(json_path, "a")
             else:
                 self._trace_file = open(filepath, "a")
             output_filter = load_filter(self.config.trace_output_filter)
@@ -323,6 +336,30 @@ class TracingListener:
         except Exception as e:
             print(f"Warning: Failed to open trace output file '{filepath}': {e}")
             self._trace_file = None
+
+    @staticmethod
+    def _cleanup_stale_tmp_files(gz_path):
+        """Remove .tmp files left behind by crashed processes.
+
+        Only removes files whose PID is no longer running to avoid
+        interfering with concurrent pabot workers.
+        """
+        import glob
+
+        pattern = gz_path[: -len(".gz")] + ".*.tmp"
+        for tmp_file in glob.glob(pattern):
+            try:
+                # Extract PID from filename: ....<pid>.tmp
+                pid_str = tmp_file.rsplit(".", 2)[-2]
+                pid = int(pid_str)
+                # Check if the process is still alive
+                try:
+                    os.kill(pid, 0)
+                except OSError:
+                    # Process is dead — safe to remove
+                    os.remove(tmp_file)
+            except (ValueError, IndexError, OSError):
+                pass
 
     @staticmethod
     def _sanitize_filename(name):
@@ -552,21 +589,72 @@ class TracingListener:
             while self.span_stack:
                 span = self.span_stack.pop()
                 span.end()
-            trace.get_tracer_provider().force_flush()
-            if self._trace_file:
-                self._trace_file.close()
-                self._trace_file = None
+        except Exception as e:
+            print(f"TracingListener error ending spans in close: {e}")
 
-            # Flush logs if enabled
+        try:
+            trace.get_tracer_provider().force_flush()
+        except Exception as e:
+            print(f"TracingListener error flushing tracer: {e}")
+
+        # Shut down the file processor before closing the file to ensure
+        # all buffered spans are written and the background thread stops.
+        if self._file_processor:
+            try:
+                self._file_processor.force_flush()
+                self._file_processor.shutdown()
+            except Exception as e:
+                print(f"TracingListener error shutting down file processor: {e}")
+
+        # Always close the trace file so all data is flushed to disk.
+        self._trace_file_path = None
+        if self._trace_file:
+            try:
+                self._trace_file_path = self._trace_file.name
+                self._trace_file.close()
+            except Exception as e:
+                print(f"TracingListener error closing trace file: {e}")
+            self._trace_file = None
+
+        # Compress the process-local temp JSON file and append to the shared
+        # .gz file. Each pabot worker compresses only its own data, using a
+        # file lock on the gz file to serialize appends. The result is a valid
+        # multi-member gzip file (concatenated gzip streams are valid per RFC 1952).
+        if self._gz_final_path and self._trace_file_path:
+            try:
+                with open(self._trace_file_path, "rb") as f_in:
+                    data = f_in.read()
+                if data:
+                    # Use a lock file to serialize gz appends across processes
+                    lock_path = self._gz_final_path + ".lock"
+                    lock_fd = os.open(lock_path, os.O_WRONLY | os.O_CREAT)
+                    try:
+                        _lock_file(lock_fd)
+                        with gzip.open(self._gz_final_path, "ab") as f_out:
+                            f_out.write(data)
+                    finally:
+                        _unlock_file(lock_fd)
+                        os.close(lock_fd)
+                        try:
+                            os.remove(lock_path)
+                        except OSError:
+                            pass  # Another process may still need it
+                os.remove(self._trace_file_path)
+            except Exception as e:
+                print(f"TracingListener error compressing trace file: {e}")
+            self._gz_final_path = None
+
+        try:
             if self.logger_provider:
                 self.logger_provider.force_flush()
+        except Exception as e:
+            print(f"TracingListener error flushing logs: {e}")
 
-            # Flush metrics
+        try:
             if self.meter_provider:
                 self.meter_provider.force_flush()
-
         except Exception as e:
-            print(f"TracingListener error in close: {e}")
+            print(f"TracingListener error flushing metrics: {e}")
 
     def log_message(self, message):
         """Capture log messages and send to logs API."""

@@ -115,7 +115,7 @@ def test_auto_file_created_on_start_suite(mock_exporter, tmp_path):
 
 @patch("robotframework_tracer.listener.HTTPExporter")
 def test_auto_gz_file_created_on_start_suite(mock_exporter, tmp_path):
-    """Test auto mode with gz format creates .json.gz file."""
+    """Test auto mode with gz format creates a per-process temp file."""
     os.chdir(tmp_path)
     listener = TracingListener("trace_output_file=auto", "trace_output_format=gz")
 
@@ -132,8 +132,9 @@ def test_auto_gz_file_created_on_start_suite(mock_exporter, tmp_path):
     listener.start_suite(data, result)
 
     assert listener._trace_file is not None
-    assert "gzip_suite_" in listener._trace_file.name
-    assert listener._trace_file.name.endswith("_traces.json.gz")
+    assert listener._trace_file.name.endswith(".tmp")
+    assert listener._gz_final_path is not None
+    assert listener._gz_final_path.endswith("_traces.json.gz")
     listener._trace_file.close()
 
 
@@ -154,11 +155,12 @@ def test_close_flushes_and_closes_file(mock_exporter, tmp_path):
 
 @patch("robotframework_tracer.listener.HTTPExporter")
 def test_gz_file_opened_on_init(mock_exporter, tmp_path):
-    """Test that gz format opens a gzip file."""
+    """Test that gz format opens a per-process temp file for later compression."""
     filepath = str(tmp_path / "traces.json")
     listener = TracingListener(f"trace_output_file={filepath}", "trace_output_format=gz")
     assert listener._trace_file is not None
-    assert listener._trace_file.name.endswith(".gz")
+    assert listener._trace_file.name.endswith(".tmp")
+    assert listener._gz_final_path == filepath + ".gz"
     listener._trace_file.close()
 
 

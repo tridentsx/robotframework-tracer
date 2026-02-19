@@ -220,6 +220,7 @@ Each span includes relevant Robot Framework metadata:
 - `rf.test.name` - Test case name
 - `rf.test.id` - Test ID
 - `rf.test.tags` - Test tags
+- `rf.test.lineno` - Source line number (RF 5+)
 - `rf.status` - PASS/FAIL/SKIP
 - `rf.elapsed_time` - Execution time
 
@@ -228,6 +229,7 @@ Each span includes relevant Robot Framework metadata:
 - `rf.keyword.type` - SETUP/TEARDOWN/KEYWORD
 - `rf.keyword.library` - Library name
 - `rf.keyword.args` - Arguments (if enabled)
+- `rf.keyword.lineno` - Source line number (RF 5+)
 - `rf.status` - PASS/FAIL
 
 ## Log Capture

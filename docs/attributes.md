@@ -62,6 +62,11 @@ Attributes attached to test case spans.
 - **Description**: Test timeout if configured
 - **Example**: `5 minutes`, `30 seconds`
 
+### `rf.test.lineno`
+- **Type**: Integer
+- **Description**: Line number in the source file where the test is defined (Robot Framework 5+)
+- **Example**: `42`, `15`
+
 ## Keyword Attributes
 
 Attributes attached to keyword/test step spans.
@@ -87,6 +92,11 @@ Attributes attached to keyword/test step spans.
 - **Description**: Comma-separated keyword arguments
 - **Example**: `Hello, World`, `id=username, admin`
 - **Note**: Limited by `RF_TRACER_MAX_ARG_LENGTH` (default: 200)
+
+### `rf.keyword.lineno`
+- **Type**: Integer
+- **Description**: Line number in the source file where the keyword is called (Robot Framework 5+)
+- **Example**: `25`, `108`
 
 ## Result Attributes
 
@@ -214,6 +224,7 @@ Events attached to spans for specific occurrences.
     "rf.test.name": "Simple Passing Test",
     "rf.test.id": "s1-t1",
     "rf.test.tags": ["smoke", "example"],
+    "rf.test.lineno": 15,
     "rf.start_time": "20251209 14:50:46.480",
     "rf.end_time": "20251209 14:50:46.520",
     "rf.elapsed_time": "0.040",
@@ -231,6 +242,7 @@ Events attached to spans for specific occurrences.
     "rf.keyword.type": "KEYWORD",
     "rf.keyword.library": "BuiltIn",
     "rf.keyword.args": "Hello, Hello",
+    "rf.keyword.lineno": 18,
     "rf.status": "PASS",
     "rf.elapsed_time": "0.001"
   }
