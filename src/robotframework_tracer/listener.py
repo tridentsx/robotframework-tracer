@@ -234,6 +234,8 @@ class TracingListener:
 
         self.span_stack = []
         self.parent_context = self._extract_parent_context()
+        self.is_pabot_run = os.environ.get("TRACEPARENT", "") != ""
+        self.suite_span = None
         self._trace_file = None
         self._file_processor = None
         self._gz_final_path = None
@@ -423,6 +425,7 @@ class TracingListener:
                 parent_context=self.parent_context,
             )
             self.span_stack.append(span)
+            self.suite_span = span
 
             # Auto-generate trace output filename on first suite span
             if self.config.trace_output_file == "auto" and self._trace_file is None:
@@ -455,8 +458,12 @@ class TracingListener:
         try:
             # Start test span as child of current suite span
             if self.span_stack:
-                # Use the parent span's context
                 with trace.use_span(self.span_stack[-1], end_on_exit=False):
+                    # For pabot runs: rename suite span to include test name
+                    # and emit a signal span for live visibility in trace viewers.
+                    if self.is_pabot_run and self.suite_span:
+                        self.suite_span.update_name(f"{self.suite_span.name} - {data.name}")
+
                     span = SpanBuilder.create_test_span(
                         self.tracer, data, result, None, self.config.span_prefix_style
                     )
@@ -466,6 +473,17 @@ class TracingListener:
                 )
 
             self.span_stack.append(span)
+
+            # For pabot runs: emit a signal span under the wrapper span
+            # so it appears in trace viewer before the test finishes.
+            if self.is_pabot_run and self.parent_context:
+                with self.tracer.start_span(
+                    f"Test Starting: {data.name}",
+                    context=self.parent_context,
+                ) as signal:
+                    signal.set_attribute("rf.test.name", data.name)
+                    signal.set_attribute("rf.signal", "test.starting")
+                # No force_flush — BatchSpanProcessor exports within ~5s
 
             # Set trace context variables within the span context
             with trace.use_span(span, end_on_exit=False):
