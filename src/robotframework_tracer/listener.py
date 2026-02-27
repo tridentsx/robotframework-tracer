@@ -128,9 +128,33 @@ class TracingListener:
         parsed_kwargs = self._parse_listener_args(args)
         self.config = TracerConfig(**parsed_kwargs)
 
-        # Initialize OpenTelemetry with automatic resource detection
+        self.tracer = None
+        self.logger_provider = None
+        self.logger = None
+        self.meter_provider = None
+        self.metrics = {}
+        self.span_stack = []
+        self._skipped_keywords = 0
+        self.parent_context = self._extract_parent_context()
+        self.is_pabot_run = os.environ.get("TRACEPARENT", "") != ""
+        self.suite_span = None
+        self._trace_file = None
+        self._file_processor = None
+        self._gz_final_path = None
+        self._in_log_message = False  # Prevent recursion
+
+        # Defer provider init when service_name=auto (resolved in start_suite)
+        if self.config.service_name != "auto":
+            self._init_providers(self.config.service_name)
+
+        # If an explicit file path is given, open it now
+        if self.config.trace_output_file and self.config.trace_output_file != "auto":
+            self._open_trace_file(self.config.trace_output_file)
+
+    def _init_providers(self, service_name):
+        """Initialize OpenTelemetry tracer, logs, and metrics providers."""
         resource_attrs = {
-            SERVICE_NAME: self.config.service_name,
+            SERVICE_NAME: service_name,
             ResourceAttributes.TELEMETRY_SDK_NAME: "robotframework-tracer",
             ResourceAttributes.TELEMETRY_SDK_LANGUAGE: "python",
             ResourceAttributes.TELEMETRY_SDK_VERSION: "0.1.0",
@@ -169,13 +193,9 @@ class TracingListener:
         self.tracer = trace.get_tracer(__name__)
 
         # Initialize logs provider if log capture is enabled
-        self.logger_provider = None
-        self.logger = None
         if self.config.capture_logs:
-            # Derive logs endpoint from traces endpoint
             logs_endpoint = self.config.endpoint.replace("/v1/traces", "/v1/logs")
             if logs_endpoint == self.config.endpoint:
-                # Endpoint doesn't have /v1/traces, append /v1/logs
                 base_url = self.config.endpoint.rstrip("/")
                 logs_endpoint = f"{base_url}/v1/logs"
 
@@ -183,15 +203,12 @@ class TracingListener:
             self.logger_provider = LoggerProvider(resource=resource)
             self.logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
 
-            # Get logger instance
             from opentelemetry._logs import get_logger, set_logger_provider
 
             set_logger_provider(self.logger_provider)
             self.logger = get_logger(__name__)
 
         # Initialize metrics provider
-        self.meter_provider = None
-        self.metrics = {}
         if self.config.capture_metrics:
             metrics_endpoint = self.config.endpoint.replace("/v1/traces", "/v1/metrics")
             if metrics_endpoint == self.config.endpoint:
@@ -205,7 +222,6 @@ class TracingListener:
 
             meter = metrics.get_meter(__name__)
 
-            # Create metrics instruments
             self.metrics = {
                 "tests_total": meter.create_counter(
                     "rf.tests.total", description="Total number of tests executed", unit="1"
@@ -232,20 +248,6 @@ class TracingListener:
                     "rf.keyword.duration", description="Keyword execution duration", unit="ms"
                 ),
             }
-
-        self.span_stack = []
-        self._skipped_keywords = 0
-        self.parent_context = self._extract_parent_context()
-        self.is_pabot_run = os.environ.get("TRACEPARENT", "") != ""
-        self.suite_span = None
-        self._trace_file = None
-        self._file_processor = None
-        self._gz_final_path = None
-
-        # If an explicit file path is given, open it now
-        if self.config.trace_output_file and self.config.trace_output_file != "auto":
-            self._open_trace_file(self.config.trace_output_file)
-        self._in_log_message = False  # Prevent recursion
 
     @staticmethod
     def _parse_listener_args(args):
@@ -419,6 +421,10 @@ class TracingListener:
     def start_suite(self, data, result):
         """Create root span for suite."""
         try:
+            # Deferred init for service_name=auto: use suite name as service name
+            if not self.tracer:
+                self._init_providers(data.name)
+
             span = SpanBuilder.create_suite_span(
                 self.tracer,
                 data,
