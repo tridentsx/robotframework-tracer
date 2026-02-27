@@ -233,6 +233,7 @@ class TracingListener:
         self.meter_provider = meter_provider
 
         self.span_stack = []
+        self._skipped_keywords = 0
         self.parent_context = self._extract_parent_context()
         self.is_pabot_run = os.environ.get("TRACEPARENT", "") != ""
         self.suite_span = None
@@ -512,13 +513,10 @@ class TracingListener:
                     1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
                 )
             elif result.status == "FAIL":
-                self.metrics["tests_failed"].add(
-                    1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
-                )
-                # Add tags dimension for failure analysis
+                attrs = {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
                 if hasattr(result, "tags") and result.tags:
-                    for tag in list(result.tags)[:5]:  # Limit to 5 tags
-                        self.metrics["tests_failed"].add(1, {"tag": str(tag)})
+                    attrs["tags"] = ",".join(str(t) for t in list(result.tags)[:5])
+                self.metrics["tests_failed"].add(1, attrs)
             elif result.status == "SKIP":
                 self.metrics["tests_skipped"].add(
                     1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
@@ -540,6 +538,7 @@ class TracingListener:
         """Create child span for keyword/step."""
         try:
             if not self.config.capture_arguments and data.args:
+                self._skipped_keywords += 1
                 return
 
             # Start keyword span as child of current test/keyword span
@@ -573,6 +572,10 @@ class TracingListener:
     def end_keyword(self, data, result):
         """Close keyword span."""
         try:
+            if self._skipped_keywords > 0:
+                self._skipped_keywords -= 1
+                return
+
             if self.span_stack:
                 span = self.span_stack.pop()
 
