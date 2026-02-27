@@ -59,11 +59,13 @@ try:
 except ImportError:
     BUILTIN_AVAILABLE = False
 
-# Try to import gRPC exporter (optional dependency)
+# Try to import gRPC exporters (optional dependency)
 try:
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
         OTLPSpanExporter as GRPCExporter,
     )
+    from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter as GRPCLogExporter
+    from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter as GRPCMetricExporter
 
     GRPC_AVAILABLE = True
 except ImportError:
@@ -173,13 +175,15 @@ class TracingListener:
         else:
             provider = TracerProvider(resource=resource)
 
-        # Select exporter based on protocol
+        use_grpc = self.config.protocol == "grpc" and GRPC_AVAILABLE
+
+        # Select trace exporter based on protocol
         if self.config.protocol == "grpc":
             if not GRPC_AVAILABLE:
                 print(
-                    "Warning: gRPC exporter not available. Install with: pip install opentelemetry-exporter-otlp-proto-grpc"
+                    "Warning: gRPC exporters not available. Install with: pip install robotframework-tracer[grpc]"
                 )
-                print("Falling back to HTTP exporter")
+                print("Falling back to HTTP exporters")
                 exporter = HTTPExporter(endpoint=self.config.endpoint)
             else:
                 exporter = GRPCExporter(endpoint=self.config.endpoint)
@@ -194,12 +198,15 @@ class TracingListener:
 
         # Initialize logs provider if log capture is enabled
         if self.config.capture_logs:
-            logs_endpoint = self.config.endpoint.replace("/v1/traces", "/v1/logs")
-            if logs_endpoint == self.config.endpoint:
-                base_url = self.config.endpoint.rstrip("/")
-                logs_endpoint = f"{base_url}/v1/logs"
+            if use_grpc:
+                log_exporter = GRPCLogExporter(endpoint=self.config.endpoint)
+            else:
+                logs_endpoint = self.config.endpoint.replace("/v1/traces", "/v1/logs")
+                if logs_endpoint == self.config.endpoint:
+                    base_url = self.config.endpoint.rstrip("/")
+                    logs_endpoint = f"{base_url}/v1/logs"
+                log_exporter = OTLPLogExporter(endpoint=logs_endpoint)
 
-            log_exporter = OTLPLogExporter(endpoint=logs_endpoint)
             self.logger_provider = LoggerProvider(resource=resource)
             self.logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
 
@@ -210,12 +217,14 @@ class TracingListener:
 
         # Initialize metrics provider
         if self.config.capture_metrics:
-            metrics_endpoint = self.config.endpoint.replace("/v1/traces", "/v1/metrics")
-            if metrics_endpoint == self.config.endpoint:
-                base_url = self.config.endpoint.rstrip("/")
-                metrics_endpoint = f"{base_url}/v1/metrics"
-
-            metric_exporter = OTLPMetricExporter(endpoint=metrics_endpoint)
+            if use_grpc:
+                metric_exporter = GRPCMetricExporter(endpoint=self.config.endpoint)
+            else:
+                metrics_endpoint = self.config.endpoint.replace("/v1/traces", "/v1/metrics")
+                if metrics_endpoint == self.config.endpoint:
+                    base_url = self.config.endpoint.rstrip("/")
+                    metrics_endpoint = f"{base_url}/v1/metrics"
+                metric_exporter = OTLPMetricExporter(endpoint=metrics_endpoint)
             metric_reader = PeriodicExportingMetricReader(metric_exporter, export_interval_millis=5000)
             self.meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
             metrics.set_meter_provider(self.meter_provider)
