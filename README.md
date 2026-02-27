@@ -192,12 +192,13 @@ robot --listener robotframework_tracer.TracingListener tests/
 | Option | Default | Description |
 |--------|---------|-------------|
 | `endpoint` | `http://localhost:4318/v1/traces` | OTLP endpoint URL |
-| `service_name` | `rf` | Service name in traces |
+| `service_name` | `rf` | Service name in traces. Use `auto` to derive from suite name (ideal for pabot) |
 | `protocol` | `http` | Protocol: `http` or `grpc` |
 | `span_prefix_style` | `none` | Span prefix style: `none`, `text`, `emoji` |
 | `capture_arguments` | `true` | Capture keyword arguments |
 | `max_arg_length` | `200` | Max length for arguments |
 | `capture_logs` | `false` | Capture log messages via Logs API |
+| `capture_metrics` | `true` | Emit OpenTelemetry metrics for test execution |
 | `log_level` | `INFO` | Minimum log level (DEBUG, INFO, WARN, ERROR) |
 | `max_log_length` | `500` | Max length for log messages |
 | `sample_rate` | `1.0` | Sampling rate (0.0-1.0, 1.0 = no sampling) |

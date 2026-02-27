@@ -30,8 +30,8 @@ Due to Robot Framework listener argument parsing limitations with URLs, environm
 #### `OTEL_SERVICE_NAME`
 - **Type**: String
 - **Default**: `rf`
-- **Description**: Service name that appears in traces
-- **Example**: `api-tests`, `ui-tests`, `integration-tests`
+- **Description**: Service name that appears in traces. Use `auto` to derive from suite name — each pabot worker will register as a separate service (e.g. `Jira`, `Grafana`, `Jenkins`).
+- **Example**: `api-tests`, `ui-tests`, `auto`
 
 #### `RF_TRACER_PROTOCOL`
 - **Type**: String
@@ -81,6 +81,12 @@ Due to Robot Framework listener argument parsing limitations with URLs, environm
 - **Default**: `false`
 - **Description**: Capture log messages via OpenTelemetry Logs API
 - **Note**: Logs are sent to `/v1/logs` endpoint with trace correlation
+
+#### `RF_TRACER_CAPTURE_METRICS`
+- **Type**: Boolean
+- **Default**: `true`
+- **Description**: Emit OpenTelemetry metrics for test execution analysis
+- **Note**: Set to `false` to disable metrics when no `/v1/metrics` endpoint is available
 
 ### Sampling
 
@@ -265,6 +271,7 @@ export RF_TRACER_SPAN_PREFIX_STYLE=emoji
 export RF_TRACER_CAPTURE_ARGUMENTS=true
 export RF_TRACER_MAX_ARG_LENGTH=200
 export RF_TRACER_CAPTURE_LOGS=false
+export RF_TRACER_CAPTURE_METRICS=true
 export RF_TRACER_SAMPLE_RATE=1.0
 export RF_TRACER_OUTPUT_FILE=auto
 export RF_TRACER_OUTPUT_FORMAT=json
