@@ -674,8 +674,9 @@ class TracingListener:
         try:
             if self.meter_provider:
                 self.meter_provider.force_flush()
+                self.meter_provider.shutdown()
         except Exception as e:
-            print(f"TracingListener error flushing metrics: {e}")
+            print(f"TracingListener error shutting down metrics: {e}")
 
     def log_message(self, message):
         """Capture log messages and send to logs API."""
