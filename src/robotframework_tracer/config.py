@@ -19,6 +19,9 @@ class TracerConfig:
         self.capture_logs = self._get_bool_config(
             "capture_logs", kwargs, "RF_TRACER_CAPTURE_LOGS", False
         )
+        self.capture_metrics = self._get_bool_config(
+            "capture_metrics", kwargs, "RF_TRACER_CAPTURE_METRICS", True
+        )
         self.log_level = self._get_config(
             "log_level", kwargs, "RF_TRACER_LOG_LEVEL", "INFO"
         ).upper()

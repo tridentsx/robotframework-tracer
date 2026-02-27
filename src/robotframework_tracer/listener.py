@@ -190,47 +190,48 @@ class TracingListener:
             self.logger = get_logger(__name__)
 
         # Initialize metrics provider
-        metrics_endpoint = self.config.endpoint.replace("/v1/traces", "/v1/metrics")
-        if metrics_endpoint == self.config.endpoint:
-            base_url = self.config.endpoint.rstrip("/")
-            metrics_endpoint = f"{base_url}/v1/metrics"
+        self.meter_provider = None
+        self.metrics = {}
+        if self.config.capture_metrics:
+            metrics_endpoint = self.config.endpoint.replace("/v1/traces", "/v1/metrics")
+            if metrics_endpoint == self.config.endpoint:
+                base_url = self.config.endpoint.rstrip("/")
+                metrics_endpoint = f"{base_url}/v1/metrics"
 
-        metric_exporter = OTLPMetricExporter(endpoint=metrics_endpoint)
-        metric_reader = PeriodicExportingMetricReader(metric_exporter, export_interval_millis=5000)
-        meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
-        metrics.set_meter_provider(meter_provider)
+            metric_exporter = OTLPMetricExporter(endpoint=metrics_endpoint)
+            metric_reader = PeriodicExportingMetricReader(metric_exporter, export_interval_millis=5000)
+            self.meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
+            metrics.set_meter_provider(self.meter_provider)
 
-        self.meter = metrics.get_meter(__name__)
+            meter = metrics.get_meter(__name__)
 
-        # Create metrics instruments
-        self.metrics = {
-            "tests_total": self.meter.create_counter(
-                "rf.tests.total", description="Total number of tests executed", unit="1"
-            ),
-            "tests_passed": self.meter.create_counter(
-                "rf.tests.passed", description="Number of tests that passed", unit="1"
-            ),
-            "tests_failed": self.meter.create_counter(
-                "rf.tests.failed", description="Number of tests that failed", unit="1"
-            ),
-            "tests_skipped": self.meter.create_counter(
-                "rf.tests.skipped", description="Number of tests that were skipped", unit="1"
-            ),
-            "test_duration": self.meter.create_histogram(
-                "rf.test.duration", description="Test execution duration", unit="ms"
-            ),
-            "suite_duration": self.meter.create_histogram(
-                "rf.suite.duration", description="Suite execution duration", unit="ms"
-            ),
-            "keywords_executed": self.meter.create_counter(
-                "rf.keywords.executed", description="Total number of keywords executed", unit="1"
-            ),
-            "keyword_duration": self.meter.create_histogram(
-                "rf.keyword.duration", description="Keyword execution duration", unit="ms"
-            ),
-        }
-
-        self.meter_provider = meter_provider
+            # Create metrics instruments
+            self.metrics = {
+                "tests_total": meter.create_counter(
+                    "rf.tests.total", description="Total number of tests executed", unit="1"
+                ),
+                "tests_passed": meter.create_counter(
+                    "rf.tests.passed", description="Number of tests that passed", unit="1"
+                ),
+                "tests_failed": meter.create_counter(
+                    "rf.tests.failed", description="Number of tests that failed", unit="1"
+                ),
+                "tests_skipped": meter.create_counter(
+                    "rf.tests.skipped", description="Number of tests that were skipped", unit="1"
+                ),
+                "test_duration": meter.create_histogram(
+                    "rf.test.duration", description="Test execution duration", unit="ms"
+                ),
+                "suite_duration": meter.create_histogram(
+                    "rf.suite.duration", description="Suite execution duration", unit="ms"
+                ),
+                "keywords_executed": meter.create_counter(
+                    "rf.keywords.executed", description="Total number of keywords executed", unit="1"
+                ),
+                "keyword_duration": meter.create_histogram(
+                    "rf.keyword.duration", description="Keyword execution duration", unit="ms"
+                ),
+            }
 
         self.span_stack = []
         self._skipped_keywords = 0
@@ -447,9 +448,10 @@ class TracingListener:
                 span.end()
 
             # Emit suite metrics
-            self.metrics["suite_duration"].record(
-                result.elapsedtime, {"suite": result.name, "status": result.status}
-            )
+            if self.metrics:
+                self.metrics["suite_duration"].record(
+                    result.elapsedtime, {"suite": result.name, "status": result.status}
+                )
 
         except Exception as e:
             print(f"TracingListener error in end_suite: {e}")
@@ -504,32 +506,33 @@ class TracingListener:
                 span.end()
 
             # Emit test metrics
-            self.metrics["tests_total"].add(
-                1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
-            )
-
-            if result.status == "PASS":
-                self.metrics["tests_passed"].add(
-                    1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
-                )
-            elif result.status == "FAIL":
-                attrs = {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
-                if hasattr(result, "tags") and result.tags:
-                    attrs["tags"] = ",".join(str(t) for t in list(result.tags)[:5])
-                self.metrics["tests_failed"].add(1, attrs)
-            elif result.status == "SKIP":
-                self.metrics["tests_skipped"].add(
+            if self.metrics:
+                self.metrics["tests_total"].add(
                     1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
                 )
 
-            # Record test duration
-            self.metrics["test_duration"].record(
-                result.elapsedtime,
-                {
-                    "suite": result.parent.name if hasattr(result, "parent") else "unknown",
-                    "status": result.status,
-                },
-            )
+                if result.status == "PASS":
+                    self.metrics["tests_passed"].add(
+                        1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
+                    )
+                elif result.status == "FAIL":
+                    attrs = {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
+                    if hasattr(result, "tags") and result.tags:
+                        attrs["tags"] = ",".join(str(t) for t in list(result.tags)[:5])
+                    self.metrics["tests_failed"].add(1, attrs)
+                elif result.status == "SKIP":
+                    self.metrics["tests_skipped"].add(
+                        1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
+                    )
+
+                # Record test duration
+                self.metrics["test_duration"].record(
+                    result.elapsedtime,
+                    {
+                        "suite": result.parent.name if hasattr(result, "parent") else "unknown",
+                        "status": result.status,
+                    },
+                )
 
         except Exception as e:
             print(f"TracingListener error in end_test: {e}")
@@ -591,15 +594,12 @@ class TracingListener:
                 span.end()
 
             # Emit keyword metrics
-            self.metrics["keywords_executed"].add(1, {"type": data.type})
-            self.metrics["keyword_duration"].record(
-                result.elapsedtime,
-                {
-                    "keyword": data.name[:50],
-                    "type": data.type,
-                    "status": result.status,
-                },  # Limit name length
-            )
+            if self.metrics:
+                self.metrics["keywords_executed"].add(1, {"type": data.type})
+                self.metrics["keyword_duration"].record(
+                    result.elapsedtime,
+                    {"type": data.type, "status": result.status},
+                )
 
         except Exception as e:
             print(f"TracingListener error in end_keyword: {e}")
