@@ -65,8 +65,12 @@ try:
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
         OTLPSpanExporter as GRPCExporter,
     )
-    from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter as GRPCLogExporter
-    from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter as GRPCMetricExporter
+    from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
+        OTLPLogExporter as GRPCLogExporter,
+    )
+    from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
+        OTLPMetricExporter as GRPCMetricExporter,
+    )
 
     GRPC_AVAILABLE = True
 except ImportError:
@@ -204,9 +208,13 @@ class TracingListener:
         processor = BatchSpanProcessor(exporter)
         provider.add_span_processor(processor)
         self._provider = provider
-        trace.set_tracer_provider(provider)
 
-        self.tracer = trace.get_tracer(__name__)
+        # Only set global provider once; subsequent calls use instance provider directly
+        if not hasattr(self, "_global_provider_set"):
+            trace.set_tracer_provider(provider)
+            self._global_provider_set = True
+
+        self.tracer = self._provider.get_tracer(__name__)
 
         # Initialize logs provider if log capture is enabled
         if self.config.capture_logs:
@@ -224,8 +232,10 @@ class TracingListener:
 
             from opentelemetry._logs import get_logger, set_logger_provider
 
-            set_logger_provider(self.logger_provider)
-            self.logger = get_logger(__name__)
+            if not hasattr(self, "_global_logger_provider_set"):
+                set_logger_provider(self.logger_provider)
+                self._global_logger_provider_set = True
+            self.logger = self.logger_provider.get_logger(__name__)
 
         # Initialize metrics provider
         if self.config.capture_metrics:
@@ -237,11 +247,15 @@ class TracingListener:
                     base_url = self.config.endpoint.rstrip("/")
                     metrics_endpoint = f"{base_url}/v1/metrics"
                 metric_exporter = OTLPMetricExporter(endpoint=metrics_endpoint)
-            metric_reader = PeriodicExportingMetricReader(metric_exporter, export_interval_millis=5000)
+            metric_reader = PeriodicExportingMetricReader(
+                metric_exporter, export_interval_millis=5000
+            )
             self.meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
-            metrics.set_meter_provider(self.meter_provider)
+            if not hasattr(self, "_global_meter_provider_set"):
+                metrics.set_meter_provider(self.meter_provider)
+                self._global_meter_provider_set = True
 
-            meter = metrics.get_meter(__name__)
+            meter = self.meter_provider.get_meter(__name__)
 
             self.metrics = {
                 "tests_total": meter.create_counter(
@@ -263,7 +277,9 @@ class TracingListener:
                     "rf.suite.duration", description="Suite execution duration", unit="ms"
                 ),
                 "keywords_executed": meter.create_counter(
-                    "rf.keywords.executed", description="Total number of keywords executed", unit="1"
+                    "rf.keywords.executed",
+                    description="Total number of keywords executed",
+                    unit="1",
                 ),
                 "keyword_duration": meter.create_histogram(
                     "rf.keyword.duration", description="Keyword execution duration", unit="ms"
@@ -590,7 +606,9 @@ class TracingListener:
                         1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
                     )
                 elif result.status == "FAIL":
-                    attrs = {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
+                    attrs = {
+                        "suite": result.parent.name if hasattr(result, "parent") else "unknown"
+                    }
                     if hasattr(result, "tags") and result.tags:
                         attrs["tags"] = ",".join(str(t) for t in list(result.tags)[:5])
                     self.metrics["tests_failed"].add(1, attrs)
