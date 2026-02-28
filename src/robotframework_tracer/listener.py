@@ -204,9 +204,13 @@ class TracingListener:
         processor = BatchSpanProcessor(exporter)
         provider.add_span_processor(processor)
         self._provider = provider
-        trace.set_tracer_provider(provider)
+        
+        # Only set global provider once; subsequent calls use instance provider directly
+        if not hasattr(self, '_global_provider_set'):
+            trace.set_tracer_provider(provider)
+            self._global_provider_set = True
 
-        self.tracer = trace.get_tracer(__name__)
+        self.tracer = self._provider.get_tracer(__name__)
 
         # Initialize logs provider if log capture is enabled
         if self.config.capture_logs:
@@ -224,8 +228,10 @@ class TracingListener:
 
             from opentelemetry._logs import get_logger, set_logger_provider
 
-            set_logger_provider(self.logger_provider)
-            self.logger = get_logger(__name__)
+            if not hasattr(self, '_global_logger_provider_set'):
+                set_logger_provider(self.logger_provider)
+                self._global_logger_provider_set = True
+            self.logger = self.logger_provider.get_logger(__name__)
 
         # Initialize metrics provider
         if self.config.capture_metrics:
@@ -239,9 +245,11 @@ class TracingListener:
                 metric_exporter = OTLPMetricExporter(endpoint=metrics_endpoint)
             metric_reader = PeriodicExportingMetricReader(metric_exporter, export_interval_millis=5000)
             self.meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
-            metrics.set_meter_provider(self.meter_provider)
+            if not hasattr(self, '_global_meter_provider_set'):
+                metrics.set_meter_provider(self.meter_provider)
+                self._global_meter_provider_set = True
 
-            meter = metrics.get_meter(__name__)
+            meter = self.meter_provider.get_meter(__name__)
 
             self.metrics = {
                 "tests_total": meter.create_counter(
