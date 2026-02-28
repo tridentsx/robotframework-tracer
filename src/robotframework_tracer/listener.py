@@ -50,6 +50,7 @@ from opentelemetry.semconv.resource import ResourceAttributes
 from .config import TracerConfig
 from .output_filter import apply_filter, load_filter
 from .span_builder import SpanBuilder
+from .version import __version__
 
 # Try to import Robot Framework BuiltIn library for variable setting
 try:
@@ -131,6 +132,7 @@ class TracingListener:
         self.config = TracerConfig(**parsed_kwargs)
 
         self.tracer = None
+        self._provider = None
         self.logger_provider = None
         self.logger = None
         self.meter_provider = None
@@ -144,9 +146,11 @@ class TracingListener:
         self._file_processor = None
         self._gz_final_path = None
         self._in_log_message = False  # Prevent recursion
+        self._auto_service = self.config.service_name == "auto"
+        self._suite_depth = 0
 
         # Defer provider init when service_name=auto (resolved in start_suite)
-        if self.config.service_name != "auto":
+        if not self._auto_service:
             self._init_providers(self.config.service_name)
 
         # If an explicit file path is given, open it now
@@ -154,12 +158,19 @@ class TracingListener:
             self._open_trace_file(self.config.trace_output_file)
 
     def _init_providers(self, service_name):
-        """Initialize OpenTelemetry tracer, logs, and metrics providers."""
+        """Initialize OpenTelemetry tracer, logs, and metrics providers.
+
+        When service_name=auto, this may be called multiple times (once per suite).
+        Previous providers are flushed and shut down before creating new ones.
+        """
+        # Shut down previous providers when reinitializing (auto mode)
+        self._shutdown_providers()
+
         resource_attrs = {
             SERVICE_NAME: service_name,
             ResourceAttributes.TELEMETRY_SDK_NAME: "robotframework-tracer",
             ResourceAttributes.TELEMETRY_SDK_LANGUAGE: "python",
-            ResourceAttributes.TELEMETRY_SDK_VERSION: "0.1.0",
+            ResourceAttributes.TELEMETRY_SDK_VERSION: __version__,
             "rf.version": robot.version.get_version(),
             "python.version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
             ResourceAttributes.HOST_NAME: platform.node(),
@@ -192,6 +203,7 @@ class TracingListener:
 
         processor = BatchSpanProcessor(exporter)
         provider.add_span_processor(processor)
+        self._provider = provider
         trace.set_tracer_provider(provider)
 
         self.tracer = trace.get_tracer(__name__)
@@ -257,6 +269,31 @@ class TracingListener:
                     "rf.keyword.duration", description="Keyword execution duration", unit="ms"
                 ),
             }
+
+    def _shutdown_providers(self):
+        """Flush and shut down current providers (for reinit in auto mode)."""
+        if self._provider:
+            try:
+                self._provider.force_flush()
+                self._provider.shutdown()
+            except Exception:
+                pass
+        if self.logger_provider:
+            try:
+                self.logger_provider.force_flush()
+                self.logger_provider.shutdown()
+            except Exception:
+                pass
+            self.logger_provider = None
+            self.logger = None
+        if self.meter_provider:
+            try:
+                self.meter_provider.force_flush()
+                self.meter_provider.shutdown()
+            except Exception:
+                pass
+            self.meter_provider = None
+            self.metrics = {}
 
     @staticmethod
     def _parse_listener_args(args):
@@ -344,7 +381,7 @@ class TracingListener:
             output_filter = load_filter(self.config.trace_output_filter)
             file_exporter = _OtlpJsonFileExporter(out=self._trace_file, output_filter=output_filter)
             self._file_processor = BatchSpanProcessor(file_exporter)
-            trace.get_tracer_provider().add_span_processor(self._file_processor)
+            self._provider.add_span_processor(self._file_processor)
             print(f"Trace output file: {filepath}")
             if output_filter:
                 print(f"Trace output filter: {self.config.trace_output_filter}")
@@ -430,9 +467,24 @@ class TracingListener:
     def start_suite(self, data, result):
         """Create root span for suite."""
         try:
-            # Deferred init for service_name=auto: use suite name as service name
-            if not self.tracer:
-                self._init_providers(data.name)
+            self._suite_depth += 1
+
+            # In auto mode, reinitialize provider per child suite so each
+            # becomes its own service in the backend (e.g. SigNoz).
+            # Depth 1 = root suite (directory), depth 2+ = actual test suites.
+            if self._auto_service:
+                if self._suite_depth == 1:
+                    if data.tests:
+                        # Single suite run (e.g. robot tests/jenkins/) — init now
+                        self._init_providers(data.name)
+                    else:
+                        # Root wrapper suite (e.g. robot tests/) — skip span,
+                        # will init per child suite at depth 2
+                        return
+                elif self._suite_depth == 2:
+                    self._init_providers(data.name)
+            elif not self.tracer:
+                self._init_providers(self.config.service_name)
 
             span = SpanBuilder.create_suite_span(
                 self.tracer,
@@ -457,6 +509,11 @@ class TracingListener:
     def end_suite(self, data, result):
         """Close suite span."""
         try:
+            # In auto mode, root wrapper suite has no span — skip
+            if self._auto_service and self._suite_depth == 1 and not data.tests:
+                self._suite_depth -= 1
+                return
+
             if self.span_stack:
                 span = self.span_stack.pop()
                 SpanBuilder.set_span_status(span, result)
@@ -467,6 +524,8 @@ class TracingListener:
                 self.metrics["suite_duration"].record(
                     result.elapsedtime, {"suite": result.name, "status": result.status}
                 )
+
+            self._suite_depth -= 1
 
         except Exception as e:
             print(f"TracingListener error in end_suite: {e}")
@@ -629,7 +688,8 @@ class TracingListener:
             print(f"TracingListener error ending spans in close: {e}")
 
         try:
-            trace.get_tracer_provider().force_flush()
+            if self._provider:
+                self._provider.force_flush()
         except Exception as e:
             print(f"TracingListener error flushing tracer: {e}")
 
