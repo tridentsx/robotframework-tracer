@@ -541,6 +541,14 @@ class TracingListener:
                     result.elapsedtime, {"suite": result.name, "status": result.status}
                 )
 
+            # Flush metrics immediately when the test suite ends — pabot may
+            # kill the worker before close() is called.
+            if self.meter_provider:
+                try:
+                    self.meter_provider.force_flush()
+                except Exception:
+                    pass
+
             self._suite_depth -= 1
 
         except Exception as e:
