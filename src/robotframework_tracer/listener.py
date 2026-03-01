@@ -502,13 +502,24 @@ class TracingListener:
             elif not self.tracer:
                 self._init_providers(self.config.service_name)
 
-            span = SpanBuilder.create_suite_span(
-                self.tracer,
-                data,
-                result,
-                self.config.span_prefix_style,
-                parent_context=self.parent_context,
-            )
+            # Use parent span context if available (depth 3+ sub-suites),
+            # otherwise use external parent_context (depth 2 root suite)
+            if self.span_stack:
+                with trace.use_span(self.span_stack[-1], end_on_exit=False):
+                    span = SpanBuilder.create_suite_span(
+                        self.tracer,
+                        data,
+                        result,
+                        self.config.span_prefix_style,
+                    )
+            else:
+                span = SpanBuilder.create_suite_span(
+                    self.tracer,
+                    data,
+                    result,
+                    self.config.span_prefix_style,
+                    parent_context=self.parent_context,
+                )
             self.span_stack.append(span)
             self.suite_span = span
 
