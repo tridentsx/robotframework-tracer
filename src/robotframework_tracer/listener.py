@@ -306,8 +306,8 @@ class TracingListener:
             try:
                 self.meter_provider.force_flush()
                 self.meter_provider.shutdown()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"TracingListener warning: meter_provider flush/shutdown failed: {e}")
             self.meter_provider = None
             self.metrics = {}
 
@@ -698,6 +698,15 @@ class TracingListener:
 
     def close(self):
         """Cleanup on listener close."""
+        # Flush metrics FIRST — with pabot, file lock contention in later
+        # steps can delay or prevent this if done last.
+        try:
+            if self.meter_provider:
+                self.meter_provider.force_flush()
+                self.meter_provider.shutdown()
+        except Exception as e:
+            print(f"TracingListener error shutting down metrics: {e}")
+
         try:
             while self.span_stack:
                 span = self.span_stack.pop()
@@ -763,13 +772,6 @@ class TracingListener:
                 self.logger_provider.force_flush()
         except Exception as e:
             print(f"TracingListener error flushing logs: {e}")
-
-        try:
-            if self.meter_provider:
-                self.meter_provider.force_flush()
-                self.meter_provider.shutdown()
-        except Exception as e:
-            print(f"TracingListener error shutting down metrics: {e}")
 
     def log_message(self, message):
         """Capture log messages and send to logs API."""
