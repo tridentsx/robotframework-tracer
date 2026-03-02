@@ -217,15 +217,15 @@ class TracingListener:
         self.tracer = self._provider.get_tracer(__name__)
 
         # Initialize logs provider if log capture is enabled
+        # Always use HTTP for logs to avoid gRPC channel contention with
+        # the trace exporter, which can intermittently drop resource attributes.
         if self.config.capture_logs:
-            if use_grpc:
-                log_exporter = GRPCLogExporter(endpoint=self.config.endpoint)
-            else:
-                logs_endpoint = self.config.endpoint.replace("/v1/traces", "/v1/logs")
-                if logs_endpoint == self.config.endpoint:
-                    base_url = self.config.endpoint.rstrip("/")
-                    logs_endpoint = f"{base_url}/v1/logs"
-                log_exporter = OTLPLogExporter(endpoint=logs_endpoint)
+            # Determine HTTP logs endpoint
+            http_base = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", self.config.endpoint)
+            logs_endpoint = http_base.replace("/v1/traces", "/v1/logs")
+            if logs_endpoint == http_base:
+                logs_endpoint = f"{http_base.rstrip('/')}/v1/logs"
+            log_exporter = OTLPLogExporter(endpoint=logs_endpoint)
 
             self.logger_provider = LoggerProvider(resource=resource)
             self.logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
