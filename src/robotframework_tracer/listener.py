@@ -166,6 +166,8 @@ class TracingListener:
 
         When service_name=auto, this may be called multiple times (once per suite).
         Previous providers are flushed and shut down before creating new ones.
+        The logger provider is initialized once and reused across suites to avoid
+        flush/shutdown overhead that interferes with gRPC trace export.
         """
         # Shut down previous providers when reinitializing (auto mode)
         self._shutdown_providers()
@@ -216,11 +218,11 @@ class TracingListener:
 
         self.tracer = self._provider.get_tracer(__name__)
 
-        # Initialize logs provider if log capture is enabled
-        # Always use HTTP for logs to avoid gRPC channel contention with
-        # the trace exporter, which can intermittently drop resource attributes.
-        if self.config.capture_logs:
-            # Determine HTTP logs endpoint
+        # Initialize logs provider once and reuse across suites.
+        # Reinitializing per suite adds flush/shutdown overhead that causes
+        # gRPC trace exports to be dropped in rapid auto-mode cycling.
+        # Logs are correlated via trace_id/span_id, not service.name.
+        if self.config.capture_logs and self.logger_provider is None:
             http_base = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", self.config.endpoint)
             logs_endpoint = http_base.replace("/v1/traces", "/v1/logs")
             if logs_endpoint == http_base:
@@ -230,11 +232,9 @@ class TracingListener:
             self.logger_provider = LoggerProvider(resource=resource)
             self.logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
 
-            from opentelemetry._logs import get_logger, set_logger_provider
+            from opentelemetry._logs import set_logger_provider
 
-            if not hasattr(self, "_global_logger_provider_set"):
-                set_logger_provider(self.logger_provider)
-                self._global_logger_provider_set = True
+            set_logger_provider(self.logger_provider)
             self.logger = self.logger_provider.get_logger(__name__)
 
         # Initialize metrics provider
@@ -287,21 +287,16 @@ class TracingListener:
             }
 
     def _shutdown_providers(self):
-        """Flush and shut down current providers (for reinit in auto mode)."""
+        """Flush and shut down current providers (for reinit in auto mode).
+        Logger provider is NOT shut down here — it's reused across suites
+        and flushed in close().
+        """
         if self._provider:
             try:
                 self._provider.force_flush()
                 self._provider.shutdown()
             except Exception:
                 pass
-        if self.logger_provider:
-            try:
-                self.logger_provider.force_flush()
-                self.logger_provider.shutdown()
-            except Exception:
-                pass
-            self.logger_provider = None
-            self.logger = None
         if self.meter_provider:
             try:
                 self.meter_provider.force_flush()
