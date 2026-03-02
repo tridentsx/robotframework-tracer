@@ -166,8 +166,8 @@ class TracingListener:
 
         When service_name=auto, this may be called multiple times (once per suite).
         Previous providers are flushed and shut down before creating new ones.
-        The logger provider is initialized once and reused across suites to avoid
-        flush/shutdown overhead that interferes with gRPC trace export.
+        The exporter and logger provider are reused across suites to avoid
+        gRPC channel churn that drops trace exports.
         """
         # Shut down previous providers when reinitializing (auto mode)
         self._shutdown_providers()
@@ -194,20 +194,22 @@ class TracingListener:
 
         use_grpc = self.config.protocol == "grpc" and GRPC_AVAILABLE
 
-        # Select trace exporter based on protocol
-        if self.config.protocol == "grpc":
-            if not GRPC_AVAILABLE:
-                print(
-                    "Warning: gRPC exporters not available. Install with: pip install robotframework-tracer[grpc]"
-                )
-                print("Falling back to HTTP exporters")
-                exporter = HTTPExporter(endpoint=self.config.endpoint)
+        # Reuse the exporter across suites to avoid gRPC channel churn.
+        # Only the TracerProvider needs to change (for the new service name).
+        if not hasattr(self, "_trace_exporter"):
+            if self.config.protocol == "grpc":
+                if not GRPC_AVAILABLE:
+                    print(
+                        "Warning: gRPC exporters not available. Install with: pip install robotframework-tracer[grpc]"
+                    )
+                    print("Falling back to HTTP exporters")
+                    self._trace_exporter = HTTPExporter(endpoint=self.config.endpoint)
+                else:
+                    self._trace_exporter = GRPCExporter(endpoint=self.config.endpoint)
             else:
-                exporter = GRPCExporter(endpoint=self.config.endpoint)
-        else:
-            exporter = HTTPExporter(endpoint=self.config.endpoint)
+                self._trace_exporter = HTTPExporter(endpoint=self.config.endpoint)
 
-        processor = BatchSpanProcessor(exporter)
+        processor = BatchSpanProcessor(self._trace_exporter)
         provider.add_span_processor(processor)
         self._provider = provider
 
