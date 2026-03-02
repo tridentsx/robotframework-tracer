@@ -165,12 +165,15 @@ class TracingListener:
         """Initialize OpenTelemetry tracer, logs, and metrics providers.
 
         When service_name=auto, this may be called multiple times (once per suite).
-        Previous providers are flushed and shut down before creating new ones.
-        The exporter and logger provider are reused across suites to avoid
-        gRPC channel churn that drops trace exports.
+        The exporter, processor, and logger provider are created once and reused.
+        Only the TracerProvider changes per suite (for the service name resource).
         """
-        # Shut down previous providers when reinitializing (auto mode)
-        self._shutdown_providers()
+        # Flush spans from previous suite before switching provider
+        if self._provider:
+            try:
+                self._provider.force_flush()
+            except Exception:
+                pass
 
         resource_attrs = {
             SERVICE_NAME: service_name,
@@ -194,23 +197,24 @@ class TracingListener:
 
         use_grpc = self.config.protocol == "grpc" and GRPC_AVAILABLE
 
-        # Reuse the exporter across suites to avoid gRPC channel churn.
-        # Only the TracerProvider needs to change (for the new service name).
-        if not hasattr(self, "_trace_exporter"):
+        # Create exporter and processor once, reuse across all suites.
+        # This avoids gRPC channel churn and thread leaks from creating
+        # new BatchSpanProcessors per suite.
+        if not hasattr(self, "_trace_processor"):
             if self.config.protocol == "grpc":
                 if not GRPC_AVAILABLE:
                     print(
                         "Warning: gRPC exporters not available. Install with: pip install robotframework-tracer[grpc]"
                     )
                     print("Falling back to HTTP exporters")
-                    self._trace_exporter = HTTPExporter(endpoint=self.config.endpoint)
+                    exporter = HTTPExporter(endpoint=self.config.endpoint)
                 else:
-                    self._trace_exporter = GRPCExporter(endpoint=self.config.endpoint)
+                    exporter = GRPCExporter(endpoint=self.config.endpoint)
             else:
-                self._trace_exporter = HTTPExporter(endpoint=self.config.endpoint)
+                exporter = HTTPExporter(endpoint=self.config.endpoint)
+            self._trace_processor = BatchSpanProcessor(exporter)
 
-        processor = BatchSpanProcessor(self._trace_exporter)
-        provider.add_span_processor(processor)
+        provider.add_span_processor(self._trace_processor)
         self._provider = provider
 
         # Only set global provider once; subsequent calls use instance provider directly
@@ -287,25 +291,6 @@ class TracingListener:
                     "rf.keyword.duration", description="Keyword execution duration", unit="ms"
                 ),
             }
-
-    def _shutdown_providers(self):
-        """Flush current providers for reinit in auto mode.
-        Only flushes (no shutdown) so the shared exporter stays alive.
-        Logger provider is reused and not touched here.
-        """
-        if self._provider:
-            try:
-                self._provider.force_flush()
-            except Exception:
-                pass
-        if self.meter_provider:
-            try:
-                self.meter_provider.force_flush()
-                self.meter_provider.shutdown()
-            except Exception as e:
-                print(f"TracingListener warning: meter_provider flush/shutdown failed: {e}")
-            self.meter_provider = None
-            self.metrics = {}
 
     @staticmethod
     def _parse_listener_args(args):
