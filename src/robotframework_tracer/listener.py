@@ -289,14 +289,13 @@ class TracingListener:
             }
 
     def _shutdown_providers(self):
-        """Flush and shut down current providers (for reinit in auto mode).
-        Logger provider is NOT shut down here — it's reused across suites
-        and flushed in close().
+        """Flush current providers for reinit in auto mode.
+        Only flushes (no shutdown) so the shared exporter stays alive.
+        Logger provider is reused and not touched here.
         """
         if self._provider:
             try:
                 self._provider.force_flush()
-                self._provider.shutdown()
             except Exception:
                 pass
         if self.meter_provider:
@@ -733,6 +732,7 @@ class TracingListener:
         try:
             if self._provider:
                 self._provider.force_flush()
+                self._provider.shutdown()
         except Exception as e:
             print(f"TracingListener error flushing tracer: {e}")
 
