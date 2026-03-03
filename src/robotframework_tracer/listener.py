@@ -243,8 +243,8 @@ class TracingListener:
             set_logger_provider(self.logger_provider)
             self.logger = self.logger_provider.get_logger(__name__)
 
-        # Initialize metrics provider
-        if self.config.capture_metrics:
+        # Initialize metrics provider once and reuse across suites.
+        if self.config.capture_metrics and self.meter_provider is None:
             if use_grpc:
                 metric_exporter = GRPCMetricExporter(endpoint=self.config.endpoint)
             else:
