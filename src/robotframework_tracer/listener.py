@@ -522,19 +522,20 @@ class TracingListener:
                 self._suite_depth -= 1
                 return
 
+            # Get trace_id BEFORE ending the span
+            trace_id = "unknown"
             if self.span_stack:
+                span = self.span_stack[-1]  # Peek at span before popping
+                if span.is_recording():
+                    span_context = span.get_span_context()
+                    trace_id = format(span_context.trace_id, "032x")
+                
                 span = self.span_stack.pop()
                 SpanBuilder.set_span_status(span, result)
                 span.end()
 
             # Emit suite metrics
             if self.metrics:
-                # Get trace_id from current span context
-                trace_id = "unknown"
-                current_span = trace.get_current_span()
-                if current_span.is_recording():
-                    span_context = current_span.get_span_context()
-                    trace_id = format(span_context.trace_id, "032x")
 
                 self.metrics["suite_duration"].record(
                     result.elapsedtime,
@@ -596,7 +597,14 @@ class TracingListener:
     def end_test(self, data, result):
         """Close test span with verdict."""
         try:
+            # Get trace_id BEFORE ending the span
+            trace_id = "unknown"
             if self.span_stack:
+                span = self.span_stack[-1]  # Peek at span before popping
+                if span.is_recording():
+                    span_context = span.get_span_context()
+                    trace_id = format(span_context.trace_id, "032x")
+                
                 span = self.span_stack.pop()
                 SpanBuilder.set_span_status(span, result)
                 if result.status == "FAIL":
@@ -605,12 +613,6 @@ class TracingListener:
 
             # Emit test metrics
             if self.metrics:
-                # Get trace_id from current span context
-                trace_id = "unknown"
-                current_span = trace.get_current_span()
-                if current_span.is_recording():
-                    span_context = current_span.get_span_context()
-                    trace_id = format(span_context.trace_id, "032x")
 
                 suite_name = result.parent.name if hasattr(result, "parent") else "unknown"
                 base_attrs = {"suite": suite_name, "trace_id": trace_id}
@@ -677,7 +679,14 @@ class TracingListener:
                 self._skipped_keywords -= 1
                 return
 
+            # Get trace_id BEFORE ending the span
+            trace_id = "unknown"
             if self.span_stack:
+                span = self.span_stack[-1]  # Peek at span before popping
+                if span.is_recording():
+                    span_context = span.get_span_context()
+                    trace_id = format(span_context.trace_id, "032x")
+                
                 span = self.span_stack.pop()
 
                 # Add event for setup/teardown end
@@ -693,12 +702,6 @@ class TracingListener:
 
             # Emit keyword metrics
             if self.metrics:
-                # Get trace_id from current span context
-                trace_id = "unknown"
-                current_span = trace.get_current_span()
-                if current_span.is_recording():
-                    span_context = current_span.get_span_context()
-                    trace_id = format(span_context.trace_id, "032x")
 
                 self.metrics["keywords_executed"].add(1, {"type": data.type, "trace_id": trace_id})
                 self.metrics["keyword_duration"].record(
