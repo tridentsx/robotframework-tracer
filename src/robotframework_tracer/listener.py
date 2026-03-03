@@ -529,8 +529,16 @@ class TracingListener:
 
             # Emit suite metrics
             if self.metrics:
+                # Get trace_id from current span context
+                trace_id = "unknown"
+                current_span = trace.get_current_span()
+                if current_span.is_recording():
+                    span_context = current_span.get_span_context()
+                    trace_id = format(span_context.trace_id, "032x")
+
                 self.metrics["suite_duration"].record(
-                    result.elapsedtime, {"suite": result.name, "status": result.status}
+                    result.elapsedtime,
+                    {"suite": result.name, "status": result.status, "trace_id": trace_id}
                 )
 
             # Flush metrics immediately when the test suite ends — pabot may
@@ -597,34 +605,32 @@ class TracingListener:
 
             # Emit test metrics
             if self.metrics:
-                self.metrics["tests_total"].add(
-                    1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
-                )
+                # Get trace_id from current span context
+                trace_id = "unknown"
+                current_span = trace.get_current_span()
+                if current_span.is_recording():
+                    span_context = current_span.get_span_context()
+                    trace_id = format(span_context.trace_id, "032x")
+
+                suite_name = result.parent.name if hasattr(result, "parent") else "unknown"
+                base_attrs = {"suite": suite_name, "trace_id": trace_id}
+
+                self.metrics["tests_total"].add(1, base_attrs)
 
                 if result.status == "PASS":
-                    self.metrics["tests_passed"].add(
-                        1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
-                    )
+                    self.metrics["tests_passed"].add(1, base_attrs)
                 elif result.status == "FAIL":
-                    attrs = {
-                        "suite": result.parent.name if hasattr(result, "parent") else "unknown"
-                    }
+                    attrs = base_attrs.copy()
                     if hasattr(result, "tags") and result.tags:
                         attrs["tags"] = ",".join(str(t) for t in list(result.tags)[:5])
                     self.metrics["tests_failed"].add(1, attrs)
                 elif result.status == "SKIP":
-                    self.metrics["tests_skipped"].add(
-                        1, {"suite": result.parent.name if hasattr(result, "parent") else "unknown"}
-                    )
+                    self.metrics["tests_skipped"].add(1, base_attrs)
 
                 # Record test duration
-                self.metrics["test_duration"].record(
-                    result.elapsedtime,
-                    {
-                        "suite": result.parent.name if hasattr(result, "parent") else "unknown",
-                        "status": result.status,
-                    },
-                )
+                duration_attrs = base_attrs.copy()
+                duration_attrs["status"] = result.status
+                self.metrics["test_duration"].record(result.elapsedtime, duration_attrs)
 
         except Exception as e:
             print(f"TracingListener error in end_test: {e}")
@@ -687,10 +693,17 @@ class TracingListener:
 
             # Emit keyword metrics
             if self.metrics:
-                self.metrics["keywords_executed"].add(1, {"type": data.type})
+                # Get trace_id from current span context
+                trace_id = "unknown"
+                current_span = trace.get_current_span()
+                if current_span.is_recording():
+                    span_context = current_span.get_span_context()
+                    trace_id = format(span_context.trace_id, "032x")
+
+                self.metrics["keywords_executed"].add(1, {"type": data.type, "trace_id": trace_id})
                 self.metrics["keyword_duration"].record(
                     result.elapsedtime,
-                    {"type": data.type, "status": result.status},
+                    {"type": data.type, "status": result.status, "trace_id": trace_id},
                 )
 
         except Exception as e:
