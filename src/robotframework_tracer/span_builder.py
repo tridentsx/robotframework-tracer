@@ -52,6 +52,7 @@ class SpanBuilder:
                 enabling trace correlation with CI pipelines or parallel runners.
         """
         attrs = AttributeExtractor.from_suite(data, result)
+        attrs["rf.type"] = "SUITE"
         name = SpanBuilder._add_prefix(data.name, "SUITE", prefix_style)
 
         # Start from parent context if provided, otherwise create a new root
@@ -76,6 +77,7 @@ class SpanBuilder:
         Note: parent_context is deprecated. Use trace.use_span() before calling this.
         """
         attrs = AttributeExtractor.from_test(data, result)
+        attrs["rf.type"] = "TEST"
         name = SpanBuilder._add_prefix(data.name, "TEST", prefix_style)
         span = tracer.start_span(name, kind=trace.SpanKind.INTERNAL, attributes=attrs)
         return span
@@ -86,6 +88,7 @@ class SpanBuilder:
     ):
         """Create child span for keyword."""
         attrs = AttributeExtractor.from_keyword(data, result, max_arg_length)
+        attrs["rf.type"] = "KEYWORD"
 
         # Build keyword name with arguments (like RF test step line)
         kw_name = data.name
