@@ -49,11 +49,15 @@ def test_end_suite(mock_trace, mock_provider, mock_exporter):
     """Test end_suite pops and ends span."""
     listener = TracingListener()
     mock_span = Mock()
+    mock_span.is_recording.return_value = True
+    mock_span.get_span_context.return_value.trace_id = 0x4BF92F3577B34DA6A3CE929D0E0E4736
     listener.span_stack = [mock_span]
+    listener._context_tokens = [Mock()]  # Match the span_stack entry
 
     data = Mock()
     result = Mock()
     result.status = "PASS"
+    result.name = "Test Suite"
     result.elapsedtime = 1000
 
     listener.end_suite(data, result)
@@ -94,13 +98,18 @@ def test_end_test_with_failure(mock_trace, mock_provider, mock_exporter):
     """Test end_test handles failure."""
     listener = TracingListener()
     mock_span = Mock()
+    mock_span.is_recording.return_value = True
+    mock_span.get_span_context.return_value.trace_id = 0x4BF92F3577B34DA6A3CE929D0E0E4736
     listener.span_stack = [mock_span]
+    listener._context_tokens = [Mock()]  # Match the span_stack entry
 
     data = Mock()
     result = Mock()
     result.status = "FAIL"
     result.elapsedtime = 1000
     result.message = "Test failed"
+    result.parent = Mock()
+    result.parent.name = "Test Suite"
 
     listener.end_test(data, result)
 

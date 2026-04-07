@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock, patch
 
-from opentelemetry import trace
+from opentelemetry import context, trace
 
 from robotframework_tracer.config import TracerConfig
 from robotframework_tracer.listener import TracingListener
@@ -14,6 +14,13 @@ class TestTraceContextPropagation:
     def setup_method(self):
         """Set up test environment."""
         self.config = TracerConfig()
+
+        # Reset the global TracerProvider so the listener can set its own.
+        # Earlier tests (e.g. test_listener.py) may lock the provider or
+        # corrupt the global context via unpatched attach/detach calls.
+        trace._TRACER_PROVIDER = None
+        trace._TRACER_PROVIDER_SET_ONCE._done = False
+        context.attach(context.Context())  # Reset global OTel context
 
         # Mock the exporter to avoid network calls
         with patch("robotframework_tracer.listener.HTTPExporter") as mock_exporter:
@@ -28,9 +35,8 @@ class TestTraceContextPropagation:
         mock_builtin = Mock()
         mock_builtin_class.return_value = mock_builtin
 
-        # Create a test span
-        tracer = trace.get_tracer(__name__)
-        with tracer.start_as_current_span("test_span"):
+        # Use the listener's own tracer to avoid global TracerProvider conflicts
+        with self.listener.tracer.start_as_current_span("test_span"):
             # Call the method
             self.listener._set_trace_context_variables()
 
@@ -59,7 +65,7 @@ class TestTraceContextPropagation:
         mock_builtin = Mock()
         mock_builtin_class.return_value = mock_builtin
 
-        tracer = trace.get_tracer(__name__)
+        tracer = self.listener.tracer
         with tracer.start_as_current_span("test_span"):
             self.listener._set_trace_context_variables()
 
@@ -144,7 +150,7 @@ class TestTraceContextPropagation:
         """Test that trace headers have the expected structure."""
         from opentelemetry.propagate import inject
 
-        tracer = trace.get_tracer(__name__)
+        tracer = self.listener.tracer
         with tracer.start_as_current_span("test_span"):
             headers = {}
             inject(headers)

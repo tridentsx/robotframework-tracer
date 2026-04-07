@@ -30,6 +30,7 @@ from google.protobuf.json_format import MessageToDict
 
 # Import metrics API
 from opentelemetry import metrics, trace
+from opentelemetry.context import attach, detach
 from opentelemetry.exporter.otlp.proto.common.trace_encoder import encode_spans
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
@@ -62,14 +63,11 @@ except ImportError:
 
 # Try to import gRPC exporters (optional dependency)
 try:
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
-        OTLPSpanExporter as GRPCExporter,
-    )
-    from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
-        OTLPLogExporter as GRPCLogExporter,
-    )
     from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
         OTLPMetricExporter as GRPCMetricExporter,
+    )
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+        OTLPSpanExporter as GRPCExporter,
     )
 
     GRPC_AVAILABLE = True
@@ -142,6 +140,7 @@ class TracingListener:
         self.meter_provider = None
         self.metrics = {}
         self.span_stack = []
+        self._context_tokens = []  # Parallel to span_stack for OTel context attach/detach
         self._skipped_keywords = 0
         self.parent_context = self._extract_parent_context()
         self.is_pabot_run = os.environ.get("TRACEPARENT", "") != ""
@@ -483,16 +482,20 @@ class TracingListener:
             elif not self.tracer:
                 self._init_providers(self.config.service_name)
 
-            # Use parent span context if available (depth 3+ sub-suites),
-            # otherwise use external parent_context (depth 2 root suite)
+            # Attach parent context if this is the root suite (no spans yet)
+            if self.parent_context and not self.span_stack:
+                token = attach(self.parent_context)
+                self._context_tokens.append(token)
+
+            # Parent context is already current via attach, so tracer.start_span
+            # automatically picks up the parent from the OTel context.
             if self.span_stack:
-                with trace.use_span(self.span_stack[-1], end_on_exit=False):
-                    span = SpanBuilder.create_suite_span(
-                        self.tracer,
-                        data,
-                        result,
-                        self.config.span_prefix_style,
-                    )
+                span = SpanBuilder.create_suite_span(
+                    self.tracer,
+                    data,
+                    result,
+                    self.config.span_prefix_style,
+                )
             else:
                 span = SpanBuilder.create_suite_span(
                     self.tracer,
@@ -503,6 +506,11 @@ class TracingListener:
                 )
             self.span_stack.append(span)
             self.suite_span = span
+
+            # Attach the new span as current in OTel context
+            ctx = trace.set_span_in_context(span)
+            token = attach(ctx)
+            self._context_tokens.append(token)
 
             # Auto-generate trace output filename on first suite span
             if self.config.trace_output_file == "auto" and self._trace_file is None:
@@ -529,17 +537,20 @@ class TracingListener:
                 if span.is_recording():
                     span_context = span.get_span_context()
                     trace_id = format(span_context.trace_id, "032x")
-                
+
                 span = self.span_stack.pop()
                 SpanBuilder.set_span_status(span, result)
                 span.end()
 
+            # Detach the context token for this suite span
+            if self._context_tokens:
+                detach(self._context_tokens.pop())
+
             # Emit suite metrics
             if self.metrics:
-
                 self.metrics["suite_duration"].record(
                     result.elapsedtime,
-                    {"suite": result.name, "status": result.status, "trace_id": trace_id}
+                    {"suite": result.name, "status": result.status, "trace_id": trace_id},
                 )
 
             # Flush metrics immediately when the test suite ends — pabot may
@@ -558,23 +569,22 @@ class TracingListener:
     def start_test(self, data, result):
         """Create child span for test case."""
         try:
-            # Start test span as child of current suite span
-            if self.span_stack:
-                with trace.use_span(self.span_stack[-1], end_on_exit=False):
-                    # For pabot runs: rename suite span to include test name
-                    # and emit a signal span for live visibility in trace viewers.
-                    if self.is_pabot_run and self.suite_span:
-                        self.suite_span.update_name(f"{self.suite_span.name} - {data.name}")
+            # For pabot runs: rename suite span to include test name
+            # and emit a signal span for live visibility in trace viewers.
+            if self.is_pabot_run and self.suite_span:
+                self.suite_span.update_name(f"{self.suite_span.name} - {data.name}")
 
-                    span = SpanBuilder.create_test_span(
-                        self.tracer, data, result, None, self.config.span_prefix_style
-                    )
-            else:
-                span = SpanBuilder.create_test_span(
-                    self.tracer, data, result, None, self.config.span_prefix_style
-                )
-
+            # Parent context is already current via attach, so tracer.start_span
+            # automatically picks up the parent from the OTel context.
+            span = SpanBuilder.create_test_span(
+                self.tracer, data, result, None, self.config.span_prefix_style
+            )
             self.span_stack.append(span)
+
+            # Attach the new span as current in OTel context
+            ctx = trace.set_span_in_context(span)
+            token = attach(ctx)
+            self._context_tokens.append(token)
 
             # For pabot runs: emit a signal span under the wrapper span
             # so it appears in trace viewer before the test finishes.
@@ -587,9 +597,8 @@ class TracingListener:
                     signal.set_attribute("rf.signal", "test.starting")
                 # No force_flush — BatchSpanProcessor exports within ~5s
 
-            # Set trace context variables within the span context
-            with trace.use_span(span, end_on_exit=False):
-                self._set_trace_context_variables()
+            # Set trace context variables (now works because span is current via attach)
+            self._set_trace_context_variables()
 
         except Exception as e:
             print(f"TracingListener error in start_test: {e}")
@@ -604,16 +613,19 @@ class TracingListener:
                 if span.is_recording():
                     span_context = span.get_span_context()
                     trace_id = format(span_context.trace_id, "032x")
-                
+
                 span = self.span_stack.pop()
                 SpanBuilder.set_span_status(span, result)
                 if result.status == "FAIL":
                     SpanBuilder.add_error_event(span, result)
                 span.end()
 
+            # Detach the context token for this test span
+            if self._context_tokens:
+                detach(self._context_tokens.pop())
+
             # Emit test metrics
             if self.metrics:
-
                 suite_name = result.parent.name if hasattr(result, "parent") else "unknown"
                 base_attrs = {"suite": suite_name, "trace_id": trace_id}
 
@@ -644,27 +656,22 @@ class TracingListener:
                 self._skipped_keywords += 1
                 return
 
-            # Start keyword span as child of current test/keyword span
-            if self.span_stack:
-                with trace.use_span(self.span_stack[-1], end_on_exit=False):
-                    span = SpanBuilder.create_keyword_span(
-                        self.tracer,
-                        data,
-                        result,
-                        None,
-                        self.config.max_arg_length,
-                        self.config.span_prefix_style,
-                    )
-            else:
-                span = SpanBuilder.create_keyword_span(
-                    self.tracer,
-                    data,
-                    result,
-                    None,
-                    self.config.max_arg_length,
-                    self.config.span_prefix_style,
-                )
+            # Parent context is already current via attach, so tracer.start_span
+            # automatically picks up the parent from the OTel context.
+            span = SpanBuilder.create_keyword_span(
+                self.tracer,
+                data,
+                result,
+                None,
+                self.config.max_arg_length,
+                self.config.span_prefix_style,
+            )
             self.span_stack.append(span)
+
+            # Attach the new span as current in OTel context
+            ctx = trace.set_span_in_context(span)
+            token = attach(ctx)
+            self._context_tokens.append(token)
 
             # Add event for setup/teardown start
             if data.type in ("SETUP", "TEARDOWN"):
@@ -686,7 +693,7 @@ class TracingListener:
                 if span.is_recording():
                     span_context = span.get_span_context()
                     trace_id = format(span_context.trace_id, "032x")
-                
+
                 span = self.span_stack.pop()
 
                 # Add event for setup/teardown end
@@ -700,9 +707,12 @@ class TracingListener:
                     SpanBuilder.add_error_event(span, result)
                 span.end()
 
+            # Detach the context token for this keyword span
+            if self._context_tokens:
+                detach(self._context_tokens.pop())
+
             # Emit keyword metrics
             if self.metrics:
-
                 self.metrics["keywords_executed"].add(1, {"type": data.type, "trace_id": trace_id})
                 self.metrics["keyword_duration"].record(
                     result.elapsedtime,
@@ -727,6 +737,9 @@ class TracingListener:
             while self.span_stack:
                 span = self.span_stack.pop()
                 span.end()
+            # Detach any remaining context tokens
+            while self._context_tokens:
+                detach(self._context_tokens.pop())
         except Exception as e:
             print(f"TracingListener error ending spans in close: {e}")
 
@@ -828,7 +841,6 @@ class TracingListener:
             log_context = None
             if self.span_stack:
                 # Use the current span's context
-
                 log_context = trace.set_span_in_context(self.span_stack[-1])
 
             # Emit log using logger API

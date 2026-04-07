@@ -142,75 +142,155 @@ def test_from_suite_with_metadata():
     assert attrs["rf.suite.metadata.Team"] == "QA"
 
 
-def test_from_test_with_template():
-    """Test extracting test attributes with template."""
+def test_from_suite_with_doc_and_lineno():
+    """Test extracting doc, lineno, setup, teardown from suite."""
     data = Mock()
-    data.name = "Templated Test"
-    data.tags = []
-    data.template = "My Template Keyword"
-    data.timeout = "30s"
+    data.name = "Test Suite"
+    data.source = "/path/to/suite.robot"
+    data.metadata = {}
+    data.doc = "Suite documentation"
+    data.lineno = 1
+    data.setup = Mock()  # truthy = has setup
+    data.teardown = Mock()
 
     result = Mock()
-    result.id = "t1"
+    result.id = "s1"
+    result.starttime = None
+    result.endtime = None
+
+    attrs = AttributeExtractor.from_suite(data, result)
+
+    assert attrs[RFAttributes.TYPE] == "suite"
+    assert attrs[RFAttributes.SUITE_DOC] == "Suite documentation"
+    assert attrs[RFAttributes.SUITE_LINENO] == 1
+    assert attrs[RFAttributes.SUITE_HAS_SETUP] is True
+    assert attrs[RFAttributes.SUITE_HAS_TEARDOWN] is True
+
+
+def test_from_suite_without_optional_attrs():
+    """Test that optional suite attributes are omitted when not present."""
+    data = Mock()
+    data.name = "Test Suite"
+    data.source = None
+    data.metadata = {}
+    data.doc = ""
+    data.lineno = None
+    data.setup = None
+    data.teardown = None
+
+    result = Mock()
+    result.id = "s1"
+    result.starttime = None
+    result.endtime = None
+
+    attrs = AttributeExtractor.from_suite(data, result)
+
+    assert attrs[RFAttributes.TYPE] == "suite"
+    assert RFAttributes.SUITE_DOC not in attrs
+    assert RFAttributes.SUITE_LINENO not in attrs
+    assert RFAttributes.SUITE_HAS_SETUP not in attrs
+    assert RFAttributes.SUITE_HAS_TEARDOWN not in attrs
+
+
+def test_from_test_with_all_attrs():
+    """Test extracting all attributes from test."""
+    data = Mock()
+    data.name = "Test Case"
+    data.tags = ["smoke"]
+    data.source = "/path/to/test.robot"
+    data.doc = "Test documentation"
+    data.lineno = 10
+    data.template = "My Template"
+    data.timeout = "30s"
+    data.setup = Mock()
+    data.teardown = Mock()
+
+    result = Mock()
+    result.id = "s1-t1"
+    result.starttime = None
+    result.endtime = None
+    result.message = "All good"
+
+    attrs = AttributeExtractor.from_test(data, result)
+
+    assert attrs[RFAttributes.TYPE] == "test"
+    assert attrs[RFAttributes.TEST_SOURCE] == "/path/to/test.robot"
+    assert attrs[RFAttributes.TEST_DOC] == "Test documentation"
+    assert attrs[RFAttributes.TEST_LINENO] == 10
+    assert attrs[RFAttributes.TEST_TEMPLATE] == "My Template"
+    assert attrs[RFAttributes.TEST_TIMEOUT] == "30s"
+    assert attrs[RFAttributes.TEST_HAS_SETUP] is True
+    assert attrs[RFAttributes.TEST_HAS_TEARDOWN] is True
+    assert attrs[RFAttributes.MESSAGE] == "All good"
+
+
+def test_from_test_without_optional_attrs():
+    """Test that optional test attributes are omitted when not present."""
+    data = Mock()
+    data.name = "Test Case"
+    data.tags = []
+    data.source = None
+    data.doc = ""
+    data.lineno = None
+    data.template = None
+    data.timeout = None
+    data.setup = None
+    data.teardown = None
+
+    result = Mock()
+    result.id = "s1-t1"
     result.starttime = None
     result.endtime = None
     result.message = ""
 
     attrs = AttributeExtractor.from_test(data, result)
-    assert attrs[RFAttributes.TEST_TEMPLATE] == "My Template Keyword"
-    assert attrs[RFAttributes.TEST_TIMEOUT] == "30s"
+
+    assert attrs[RFAttributes.TYPE] == "test"
+    assert RFAttributes.TEST_SOURCE not in attrs
+    assert RFAttributes.TEST_DOC not in attrs
+    assert RFAttributes.TEST_LINENO not in attrs
+    assert RFAttributes.TEST_HAS_SETUP not in attrs
+    assert RFAttributes.TEST_HAS_TEARDOWN not in attrs
+    assert RFAttributes.MESSAGE not in attrs
 
 
-def test_from_test_with_lineno():
-    """Test extracting test attributes with line number (RF 5+)."""
+def test_from_keyword_with_doc_and_lineno():
+    """Test extracting doc, lineno, and message from keyword."""
     data = Mock()
-    data.name = "Test With Line"
-    data.tags = []
+    data.name = "Click Element"
+    data.type = "KEYWORD"
+    data.libname = "SeleniumLibrary"
+    data.args = ["//button"]
+    data.doc = "Clicks the given element"
     data.lineno = 42
 
     result = Mock()
-    result.id = "t1"
+    result.message = "Element clicked"
 
-    attrs = AttributeExtractor.from_test(data, result)
-    assert attrs[RFAttributes.TEST_LINENO] == 42
+    attrs = AttributeExtractor.from_keyword(data, result)
 
-
-def test_from_test_without_lineno():
-    """Test extracting test attributes without line number (RF <5)."""
-    data = Mock(spec=["name", "tags"])  # No lineno attribute
-    data.name = "Test Without Line"
-    data.tags = []
-
-    result = Mock()
-    result.id = "t1"
-
-    attrs = AttributeExtractor.from_test(data, result)
-    assert RFAttributes.TEST_LINENO not in attrs
+    assert attrs[RFAttributes.TYPE] == "keyword"
+    assert attrs[RFAttributes.KEYWORD_DOC] == "Clicks the given element"
+    assert attrs[RFAttributes.KEYWORD_LINENO] == 42
+    assert attrs[RFAttributes.MESSAGE] == "Element clicked"
 
 
-def test_from_keyword_with_lineno():
-    """Test extracting keyword attributes with line number (RF 5+)."""
+def test_from_keyword_without_optional_attrs():
+    """Test that optional keyword attributes are omitted when not present."""
     data = Mock()
-    data.name = "My Keyword"
+    data.name = "Log"
     data.type = "KEYWORD"
-    data.libname = "MyLib"
+    data.libname = "BuiltIn"
     data.args = []
-    data.lineno = 15
+    data.doc = ""
+    data.lineno = None
 
     result = Mock()
+    result.message = ""
 
     attrs = AttributeExtractor.from_keyword(data, result)
-    assert attrs[RFAttributes.KEYWORD_LINENO] == 15
 
-
-def test_from_keyword_without_lineno():
-    """Test extracting keyword attributes without line number (RF <5)."""
-    data = Mock(spec=["name", "type", "args"])  # No lineno attribute
-    data.name = "My Keyword"
-    data.type = "KEYWORD"
-    data.args = []
-
-    result = Mock()
-
-    attrs = AttributeExtractor.from_keyword(data, result)
+    assert attrs[RFAttributes.TYPE] == "keyword"
+    assert RFAttributes.KEYWORD_DOC not in attrs
     assert RFAttributes.KEYWORD_LINENO not in attrs
+    assert RFAttributes.MESSAGE not in attrs
