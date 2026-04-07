@@ -199,21 +199,25 @@ class TracingListener:
         # Create exporter and processor once, reuse across all suites.
         # This avoids gRPC channel churn and thread leaks from creating
         # new BatchSpanProcessors per suite.
-        if not hasattr(self, "_trace_processor"):
-            if self.config.protocol == "grpc":
-                if not GRPC_AVAILABLE:
-                    print(
-                        "Warning: gRPC exporters not available. Install with: pip install robotframework-tracer[grpc]"
-                    )
-                    print("Falling back to HTTP exporters")
-                    exporter = HTTPExporter(endpoint=self.config.endpoint)
+        if not hasattr(self, "_trace_processors"):
+            self._trace_processors = []
+            endpoints = self.config.endpoints if self.config.endpoints else [self.config.endpoint]
+            for ep in endpoints:
+                if self.config.protocol == "grpc":
+                    if not GRPC_AVAILABLE:
+                        print(
+                            "Warning: gRPC exporters not available. Install with: pip install robotframework-tracer[grpc]"
+                        )
+                        print("Falling back to HTTP exporters")
+                        exporter = HTTPExporter(endpoint=ep)
+                    else:
+                        exporter = GRPCExporter(endpoint=ep)
                 else:
-                    exporter = GRPCExporter(endpoint=self.config.endpoint)
-            else:
-                exporter = HTTPExporter(endpoint=self.config.endpoint)
-            self._trace_processor = BatchSpanProcessor(exporter)
+                    exporter = HTTPExporter(endpoint=ep)
+                self._trace_processors.append(BatchSpanProcessor(exporter))
 
-        provider.add_span_processor(self._trace_processor)
+        for proc in self._trace_processors:
+            provider.add_span_processor(proc)
         self._provider = provider
 
         # Only set global provider once; subsequent calls use instance provider directly

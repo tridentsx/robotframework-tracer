@@ -275,3 +275,53 @@ def test_start_suite_passes_parent_context(mock_trace, mock_provider, mock_expor
     # Verify the suite span was created with a context (not None)
     call_args = listener.tracer.start_span.call_args
     assert call_args.kwargs.get("context") is not None or call_args[1].get("context") is not None
+
+
+@patch("robotframework_tracer.listener.BatchSpanProcessor")
+@patch("robotframework_tracer.listener.HTTPExporter")
+@patch("robotframework_tracer.listener.TracerProvider")
+@patch("robotframework_tracer.listener.trace")
+def test_multi_endpoint_creates_multiple_processors(
+    mock_trace, mock_provider, mock_exporter, mock_processor
+):
+    """Test that multiple endpoints each get their own exporter and processor."""
+    listener = TracingListener()
+    listener.config.endpoints = [
+        "http://jaeger:4318/v1/traces",
+        "http://tempo:4318/v1/traces",
+    ]
+    # Force re-init of providers
+    if hasattr(listener, "_trace_processors"):
+        delattr(listener, "_trace_processors")
+    listener._provider = None
+    mock_exporter.reset_mock()
+    mock_processor.reset_mock()
+    listener._init_providers("test-service")
+
+    # Should have created 2 exporters and 2 processors
+    assert mock_exporter.call_count == 2
+    assert mock_processor.call_count == 2
+    mock_exporter.assert_any_call(endpoint="http://jaeger:4318/v1/traces")
+    mock_exporter.assert_any_call(endpoint="http://tempo:4318/v1/traces")
+
+
+@patch("robotframework_tracer.listener.BatchSpanProcessor")
+@patch("robotframework_tracer.listener.HTTPExporter")
+@patch("robotframework_tracer.listener.TracerProvider")
+@patch("robotframework_tracer.listener.trace")
+def test_single_endpoint_fallback_when_no_endpoints(
+    mock_trace, mock_provider, mock_exporter, mock_processor
+):
+    """Test that empty endpoints list falls back to single endpoint."""
+    listener = TracingListener()
+    listener.config.endpoints = []
+    listener.config.endpoint = "http://jaeger:4318/v1/traces"
+    if hasattr(listener, "_trace_processors"):
+        delattr(listener, "_trace_processors")
+    listener._provider = None
+    mock_exporter.reset_mock()
+    mock_processor.reset_mock()
+    listener._init_providers("test-service")
+
+    assert mock_processor.call_count == 1
+    mock_exporter.assert_called_with(endpoint="http://jaeger:4318/v1/traces")

@@ -1,0 +1,6 @@
+{
+  "version": "1.0.0",
+  "description": "Minimal configuration — only required settings",
+  "service_name": "my-tests",
+  "endpoint": "http://jaeger:4318/v1/traces"
+}

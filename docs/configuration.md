@@ -4,7 +4,56 @@ Complete reference for all configuration options in robotframework-tracer.
 
 ## Configuration Methods
 
-### 1. Environment Variables (Recommended)
+### 1. Config File (Recommended)
+
+Create a `.rf-tracer.json` in your project root:
+
+```json
+{
+  "version": "1.0.0",
+  "service_name": "my-tests",
+  "endpoints": [
+    "http://jaeger:4318/v1/traces"
+  ],
+  "capture_logs": true,
+  "log_level": "INFO",
+  "span_prefix_style": "emoji",
+  "output": {
+    "file": "auto",
+    "format": "gz",
+    "filter": "minimal"
+  }
+}
+```
+
+The file is auto-discovered in the working directory. You can also use `rf-tracer.json` (without the dot prefix). Override the path with the `RF_TRACER_CONFIG` env var:
+
+```bash
+RF_TRACER_CONFIG=/path/to/config.json robot --listener robotframework_tracer.TracingListener tests/
+```
+
+The config file is validated against a JSON Schema (`schemas/config-v1.json`) on load. Install `jsonschema` for validation support (`pip install jsonschema`).
+
+See `examples/` for ready-to-use config files: minimal and CI/CD.
+
+#### Multiple Endpoints
+
+To send traces to multiple backends simultaneously, use `endpoints` (config file only):
+
+```json
+{
+  "version": "1.0.0",
+  "service_name": "my-tests",
+  "endpoints": [
+    "http://jaeger:4318/v1/traces",
+    "http://tempo:4318/v1/traces"
+  ]
+}
+```
+
+Each endpoint gets its own exporter. When `endpoints` is set, the single `endpoint` value is ignored for traces.
+
+### 2. Environment Variables
 
 ```bash
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:14318/v1/traces
@@ -13,9 +62,9 @@ export RF_TRACER_SPAN_PREFIX_STYLE=emoji
 robot --listener robotframework_tracer.TracingListener tests/
 ```
 
-### 2. Listener Arguments (Limited)
+### 3. Listener Arguments (Limited)
 
-Due to Robot Framework listener argument parsing limitations with URLs, environment variables are recommended.
+Due to Robot Framework listener argument parsing limitations with URLs, environment variables or config files are recommended.
 
 ## Configuration Options
 
@@ -305,8 +354,10 @@ export OTEL_SERVICE_NAME=my-tests
 
 ## Configuration Precedence
 
-1. **Environment Variables** (highest priority)
-2. **Default Values** (lowest priority)
+1. **Listener arguments** (highest priority)
+2. **Environment variables**
+3. **Config file** (`.rf-tracer.json`)
+4. **Default values** (lowest priority)
 
 ## Best Practices
 
