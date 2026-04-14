@@ -1,0 +1,17 @@
+{
+  "version": "1.0.0",
+  "description": "CI/CD configuration — compressed output, minimal filter, no logs",
+  "service_name": "ci-robot-tests",
+  "endpoints": [
+    "http://otel-collector:4318/v1/traces",
+    "http://tempo:4318/v1/traces"
+  ],
+  "capture_logs": false,
+  "capture_arguments": true,
+  "span_prefix_style": "text",
+  "output": {
+    "file": "auto",
+    "format": "gz",
+    "filter": "minimal"
+  }
+}
