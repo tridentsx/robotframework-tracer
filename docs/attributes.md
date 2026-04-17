@@ -190,6 +190,32 @@ Events attached to spans for specific occurrences.
   - `keyword`: Keyword name
   - `status`: Execution status
 
+### `rf.screenshot`
+- **Attached to**: Keyword spans (when screenshot is detected in log output)
+- **Triggered by**: SeleniumLibrary (`Capture Page Screenshot`) and Browser/Playwright (`Take Screenshot`)
+- **Attributes (path mode)**:
+  - `rf.screenshot.mode`: `"path"`
+  - `rf.screenshot.path`: Absolute file path
+  - `rf.screenshot.mime`: MIME type (e.g. `image/png`)
+  - `rf.screenshot.name`: Filename
+  - `rf.screenshot.timestamp`: Epoch milliseconds
+- **Attributes (embedded mode)**:
+  - `rf.screenshot.mode`: `"embedded"`
+  - `rf.screenshot.path`: Absolute file path
+  - `rf.screenshot.data`: Base64-encoded image data
+  - `rf.screenshot.mime`: MIME type
+  - `rf.screenshot.name`: Filename
+  - `rf.screenshot.size`: File size in bytes
+  - `rf.screenshot.sha256`: SHA-256 hash of the image
+  - `rf.screenshot.timestamp`: Epoch milliseconds
+- **Attributes (fallback — embedded mode when file is too large or unreadable)**:
+  - `rf.screenshot.mode`: `"path_fallback"`
+  - `rf.screenshot.path`: Absolute file path
+  - `rf.screenshot.mime`: MIME type
+  - `rf.screenshot.name`: Filename
+  - `rf.screenshot.size`: File size in bytes (0 if unreadable)
+  - `rf.screenshot.timestamp`: Epoch milliseconds
+
 ## Example Span with Attributes
 
 ### Suite Span

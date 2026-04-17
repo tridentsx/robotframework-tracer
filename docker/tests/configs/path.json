@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "description": "Path mode: file path reference only in trace events",
+  "screenshots": {
+    "mode": "path"
+  },
+  "output": {
+    "file": "/output/trace_path.json",
+    "format": "json"
+  }
+}

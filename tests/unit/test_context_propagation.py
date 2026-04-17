@@ -29,6 +29,14 @@ def _make_listener():
     """Create a TracingListener with a no-op exporter (no network)."""
     with patch("robotframework_tracer.listener.HTTPExporter"):
         listener = TracingListener()
+    # Shut down the meter provider to stop background export threads
+    if listener.meter_provider:
+        try:
+            listener.meter_provider.shutdown()
+        except Exception:
+            pass
+        listener.meter_provider = None
+        listener.metrics = {}
     # Replace the tracer with a real SDK tracer (no-op export)
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(_NoOpExporter()))

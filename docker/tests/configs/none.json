@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "description": "None mode: no screenshot tracing at all",
+  "screenshots": {
+    "mode": "none"
+  },
+  "output": {
+    "file": "/output/trace_none.json",
+    "format": "json"
+  }
+}

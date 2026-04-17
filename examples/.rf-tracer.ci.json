@@ -9,6 +9,9 @@
   "capture_logs": false,
   "capture_arguments": true,
   "span_prefix_style": "text",
+  "screenshots": {
+    "mode": "path"
+  },
   "output": {
     "file": "auto",
     "format": "gz",
