@@ -50,6 +50,7 @@ from opentelemetry.semconv.resource import ResourceAttributes
 
 from .config import TracerConfig
 from .output_filter import apply_filter, load_filter
+from .screenshot import process_log_message
 from .span_builder import SpanBuilder
 from .version import __version__
 
@@ -149,6 +150,7 @@ class TracingListener:
         self._file_processor = None
         self._gz_final_path = None
         self._in_log_message = False  # Prevent recursion
+        self._rf_output_dir = ""  # RF output directory for screenshot path resolution
         self._auto_service = self.config.service_name == "auto"
         self._suite_depth = 0
 
@@ -523,6 +525,13 @@ class TracingListener:
                 ext = "json.gz" if self.config.trace_output_format == "gz" else "json"
                 filename = f"{suite_name}_{trace_id[:8]}_traces.{ext}"
                 self._open_trace_file(filename)
+
+            # Resolve RF output directory for screenshot path resolution
+            if not self._rf_output_dir and BUILTIN_AVAILABLE:
+                try:
+                    self._rf_output_dir = BuiltIn().get_variable_value("${OUTPUT_DIR}", "")
+                except Exception:
+                    pass
         except Exception as e:
             print(f"TracingListener error in start_suite: {e}")
 
@@ -808,12 +817,25 @@ class TracingListener:
             print(f"TracingListener error flushing logs: {e}")
 
     def log_message(self, message):
-        """Capture log messages and send to logs API."""
+        """Capture log messages and send to logs API. Also detect screenshots."""
         if self._in_log_message:
             return  # Prevent recursion
 
         self._in_log_message = True
         try:
+            # Screenshot detection runs regardless of capture_logs setting.
+            # It only needs an active span and a non-"none" screenshot mode.
+            if self.config.screenshots.mode != "none" and self.span_stack:
+                try:
+                    process_log_message(
+                        self.config.screenshots,
+                        self.span_stack[-1],
+                        message.message,
+                        self._rf_output_dir,
+                    )
+                except Exception:
+                    pass  # Never break the trace
+
             if not self.config.capture_logs or not self.logger:
                 return
 

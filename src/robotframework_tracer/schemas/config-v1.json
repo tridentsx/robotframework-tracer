@@ -87,6 +87,33 @@
           "description": "Output filter preset (minimal, full) or path to filter .json"
         }
       }
+    },
+    "screenshots": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Screenshot capture settings for SeleniumLibrary / Browser (Playwright)",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "path", "embedded"],
+          "description": "Screenshot capture mode (default: none)"
+        },
+        "max_size_kb": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Max image size in KB for embedded mode; larger files fallback to path (default: 200)"
+        },
+        "retry_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Retry attempts for reading not-yet-flushed files (default: 3)"
+        },
+        "retry_delay_sec": {
+          "type": "number",
+          "minimum": 0.0,
+          "description": "Delay between retries in seconds (default: 0.05)"
+        }
+      }
     }
   }
 }

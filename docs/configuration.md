@@ -137,6 +137,58 @@ Due to Robot Framework listener argument parsing limitations with URLs, environm
 - **Description**: Emit OpenTelemetry metrics for test execution analysis
 - **Note**: Set to `false` to disable metrics when no `/v1/metrics` endpoint is available
 
+### Screenshot Capture
+
+#### `screenshots.mode` / `RF_TRACER_SCREENSHOT_MODE`
+- **Type**: String
+- **Default**: `none`
+- **Options**: `none`, `path`, `embedded`
+- **Description**: Capture screenshots from SeleniumLibrary and Browser (Playwright) as span events
+  - `none`: No screenshot processing (default, backward compatible)
+  - `path`: Attach file path reference only (lightweight)
+  - `embedded`: Base64-encode image data with SHA-256 hash (falls back to `path` if file is too large or unreadable)
+
+#### `screenshots.max_size_kb`
+- **Type**: Integer
+- **Default**: `200`
+- **Description**: Maximum image size in KB for embedded mode. Files exceeding this limit automatically fall back to path mode.
+
+#### `screenshots.retry_attempts`
+- **Type**: Integer
+- **Default**: `3`
+- **Description**: Number of retry attempts when reading screenshot files that may not be flushed yet (common with Selenium/Playwright async writes).
+
+#### `screenshots.retry_delay_sec`
+- **Type**: Float
+- **Default**: `0.05`
+- **Description**: Delay in seconds between retry attempts.
+
+**Config file example:**
+
+```json
+{
+  "version": "1.0.0",
+  "screenshots": {
+    "mode": "embedded",
+    "max_size_kb": 500,
+    "retry_attempts": 5,
+    "retry_delay_sec": 0.1
+  }
+}
+```
+
+**Environment variable override:**
+
+```bash
+export RF_TRACER_SCREENSHOT_MODE=path
+```
+
+**Listener argument override:**
+
+```bash
+robot --listener "robotframework_tracer.TracingListener:screenshot_mode=embedded" tests/
+```
+
 ### Sampling
 
 #### `RF_TRACER_SAMPLE_RATE`

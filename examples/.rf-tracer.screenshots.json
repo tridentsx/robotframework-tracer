@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "description": "Screenshot tracing — embed small images, fallback to path for large ones",
+  "service_name": "ui-tests",
+  "endpoint": "http://jaeger:4318/v1/traces",
+  "screenshots": {
+    "mode": "embedded",
+    "max_size_kb": 200,
+    "retry_attempts": 3,
+    "retry_delay_sec": 0.05
+  },
+  "output": {
+    "file": "auto",
+    "format": "json"
+  }
+}

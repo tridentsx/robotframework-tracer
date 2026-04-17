@@ -48,6 +48,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Screenshot tracing** for SeleniumLibrary and Browser (Playwright)
+  - Detects screenshots via `log_message` HTML output (`<img>` tags)
+  - Three configurable modes: `none` (default), `path`, `embedded`
+  - Embedded mode: base64-encoded image data with SHA-256 hash and size guard
+  - Automatic fallback to path mode when files are too large or unreadable
+  - Retry logic for not-yet-flushed screenshot files
+  - `rf.screenshot.mode` field shows `embedded`, `path`, or `path_fallback` for debugging
+  - `rf.screenshot.timestamp` for ordering and log correlation
+  - Configurable via `.rf-tracer.json` `screenshots` section, `RF_TRACER_SCREENSHOT_MODE` env var, or `screenshot_mode` listener kwarg
+  - Supported formats: PNG, JPEG, WebP
+  - 42 unit tests, Docker integration tests with real headless Chrome and Playwright
+  - New module: `screenshot.py` (~250 LOC)
+  - Updated JSON Schema (`config-v1.json`) with `screenshots` section
+- **Docker test environment** for running RF tests with SeleniumLibrary and Browser (Playwright)
+  - Headless Chrome + Chromium with real screenshot capture
+  - 4 test scenarios: embedded mode, path mode, none mode, failure handlers
+  - Trace verification script (`verify_screenshots.py`)
+
+### Added
 - **Live test visibility for pabot runs** — "Test Starting" signal spans are emitted immediately when a test begins, appearing in trace viewers (SigNoz, Jaeger) before the test finishes
   - Signal spans are created under the wrapper's root span context for immediate visibility
   - Suite spans are renamed to include the test name (e.g. "Long Running Suite - My Test") for pabot runs

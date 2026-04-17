@@ -79,9 +79,11 @@ robotframework-tracer/
 │       ├── config.py             # Configuration management
 │       ├── attributes.py         # Attribute mapping/extraction
 │       ├── output_filter.py      # Output filter for trace JSON files
+│       ├── screenshot.py         # Screenshot capture for Selenium/Playwright
 │       ├── version.py
 │       ├── schemas/
 │       │   └── output-filter-v1.json  # JSON Schema for filter validation
+│       │   └── config-v1.json         # JSON Schema for config file validation
 │       └── presets/
 │           ├── full.json         # Full output preset (include all)
 │           └── minimal.json      # Minimal output preset (~30% smaller)│

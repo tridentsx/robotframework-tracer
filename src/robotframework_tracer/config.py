@@ -2,6 +2,8 @@ import json
 import os
 from pathlib import Path
 
+from .screenshot import ScreenshotConfig
+
 # Config file search names (checked in order)
 CONFIG_FILE_NAMES = [".rf-tracer.json", "rf-tracer.json"]
 
@@ -78,6 +80,8 @@ def _flatten_config_file(data):
       output.file   -> trace_output_file
       output.format -> trace_output_format
       output.filter -> trace_output_filter
+
+    The 'screenshots' section is preserved as-is (dict) for ScreenshotConfig.
     """
     flat = {}
     for key, value in data.items():
@@ -90,6 +94,9 @@ def _flatten_config_file(data):
                 flat["trace_output_format"] = value["format"]
             if "filter" in value:
                 flat["trace_output_filter"] = value["filter"]
+        elif key == "screenshots" and isinstance(value, dict):
+            # Keep as dict — ScreenshotConfig.from_dict() handles it
+            flat["screenshots"] = value
         else:
             flat[key] = value
     return flat
@@ -155,6 +162,19 @@ class TracerConfig:
         self.trace_output_filter = self._get_config(
             "trace_output_filter", kwargs, "RF_TRACER_OUTPUT_FILTER", ""
         )
+
+        # Screenshot capture config (from 'screenshots' section in config file)
+        screenshots_dict = self._file_config.get("screenshots", {})
+        # Allow env var override for mode
+        env_mode = os.environ.get("RF_TRACER_SCREENSHOT_MODE", "")
+        if env_mode:
+            screenshots_dict = dict(screenshots_dict)  # copy to avoid mutating
+            screenshots_dict["mode"] = env_mode
+        # Allow listener kwarg override for mode
+        if "screenshot_mode" in kwargs:
+            screenshots_dict = dict(screenshots_dict)
+            screenshots_dict["mode"] = kwargs["screenshot_mode"]
+        self.screenshots = ScreenshotConfig.from_dict(screenshots_dict)
 
     def _get_config(self, key, kwargs, env_var, default):
         """Get config value. Precedence: kwargs > env > config file > default."""

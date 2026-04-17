@@ -328,7 +328,7 @@ Apache License 2.0 - See [docs/LICENSE](docs/LICENSE) for details.
 
 ## Status
 
-**Current Version:** v0.4.0  
+**Current Version:** v0.5.16  
 **Status:** Production-ready with full observability (traces, logs, metrics)
 
 **Features:**

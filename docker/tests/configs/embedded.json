@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "description": "Embedded mode: base64 screenshots in trace events",
+  "screenshots": {
+    "mode": "embedded",
+    "max_size_kb": 500,
+    "retry_attempts": 5,
+    "retry_delay_sec": 0.1
+  },
+  "output": {
+    "file": "/output/trace_embedded.json",
+    "format": "json"
+  }
+}

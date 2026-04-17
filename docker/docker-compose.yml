@@ -1,0 +1,27 @@
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: rf-jaeger
+    ports:
+      - "16687:16686"
+      - "14318:4318"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
+  robot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rf-runner
+    depends_on:
+      - jaeger
+    volumes:
+      - ..:/work
+      - ./tests:/tests
+      - ./output:/output
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=rf-screenshot-test
+    working_dir: /tests
+    # Default: run all scenarios
+    command: bash run_scenarios.sh
