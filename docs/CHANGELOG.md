@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-04-30
+
+### Removed
+- **OpenTelemetry Metrics** - Removed metrics emission (traces and logs provide sufficient observability for test execution)
+- `capture_metrics` configuration option and `RF_TRACER_CAPTURE_METRICS` environment variable
+
 ## [0.4.0] - 2026-02-18
 
 ### Added
@@ -24,11 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **OpenTelemetry Logs API integration** - Logs sent to `/v1/logs` endpoint with trace correlation
-- **OpenTelemetry Metrics** - Automatic emission of test execution metrics
-  - Test metrics: `rf.tests.total`, `rf.tests.passed`, `rf.tests.failed`, `rf.tests.skipped`
-  - Duration histograms: `rf.test.duration`, `rf.suite.duration`, `rf.keyword.duration`
-  - Keyword metrics: `rf.keywords.executed`
-  - Dimensions: suite, status, tag, type, keyword
 - **Proper span hierarchy** - Fixed parent-child relationships using `trace.use_span()`
 - Suite setup/teardown spans properly included in trace hierarchy
 
@@ -43,9 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Span parent-child relationships now work correctly
 - Logs properly correlated to traces with trace_id and span_id
-- Service name properly set in logs and metrics
-
-## [Unreleased]
+- Service name properly set in logs
 
 ### Added
 - **Screenshot tracing** for SeleniumLibrary and Browser (Playwright)

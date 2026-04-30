@@ -549,12 +549,7 @@
 - [ ] Document context propagation
 - [ ] Add example with microservices
 
-### 7.5 Metrics Integration
-- [ ] Export RF metrics alongside traces
-- [ ] Use OpenTelemetry Metrics API
-- [ ] Document metrics setup
-
-### 7.6 Dashboard Templates
+### 7.5 Dashboard Templates
 - [ ] Create Grafana dashboard for RF traces
 - [ ] Create Jaeger dashboard queries
 - [ ] Document dashboard setup

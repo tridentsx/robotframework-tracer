@@ -328,7 +328,6 @@ class AttributeExtractor:
 
 - [x] Support for parallel execution (pabot) — via TRACEPARENT env var
 - [ ] Support for remote execution
-- [ ] Integration with RF metrics
 - [ ] Custom span processors
 - [ ] Trace context injection for HTTP libraries
 - [ ] Documentation and examples
@@ -532,7 +531,6 @@ sample_rate: 1.0
 1. ~~**Trace Context Propagation**: Inject trace context into HTTP requests~~ ✅ Implemented (TRACEPARENT/TRACESTATE)
 2. ~~**Local Trace Output**: Write spans to local file for offline analysis~~ ✅ Implemented (RF_TRACER_OUTPUT_FILE)
 3. **Custom Instrumentation**: API for custom spans in test libraries
-3. **Metrics Integration**: Export RF metrics alongside traces
 4. **Dashboard Templates**: Pre-built Grafana dashboards
 5. **CI/CD Integration**: GitHub Actions, GitLab CI examples
 6. **Trace Analysis**: CLI tool to analyze traces

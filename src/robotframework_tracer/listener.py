@@ -28,20 +28,16 @@ else:
 import robot
 from google.protobuf.json_format import MessageToDict
 
-# Import metrics API
-from opentelemetry import metrics, trace
+from opentelemetry import trace
 from opentelemetry.context import attach, detach
 from opentelemetry.exporter.otlp.proto.common.trace_encoder import encode_spans
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
-from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as HTTPExporter
 from opentelemetry.propagate import extract, inject
 
 # Import logs API
 from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
@@ -64,9 +60,6 @@ except ImportError:
 
 # Try to import gRPC exporters (optional dependency)
 try:
-    from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
-        OTLPMetricExporter as GRPCMetricExporter,
-    )
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
         OTLPSpanExporter as GRPCExporter,
     )
@@ -138,8 +131,6 @@ class TracingListener:
         self._provider = None
         self.logger_provider = None
         self.logger = None
-        self.meter_provider = None
-        self.metrics = {}
         self.span_stack = []
         self._context_tokens = []  # Parallel to span_stack for OTel context attach/detach
         self._skipped_keywords = 0
@@ -163,7 +154,7 @@ class TracingListener:
             self._open_trace_file(self.config.trace_output_file)
 
     def _init_providers(self, service_name):
-        """Initialize OpenTelemetry tracer, logs, and metrics providers.
+        """Initialize OpenTelemetry tracer and logs providers.
 
         When service_name=auto, this may be called multiple times (once per suite).
         The exporter, processor, and logger provider are created once and reused.
@@ -247,55 +238,6 @@ class TracingListener:
 
             set_logger_provider(self.logger_provider)
             self.logger = self.logger_provider.get_logger(__name__)
-
-        # Initialize metrics provider once and reuse across suites.
-        if self.config.capture_metrics and self.meter_provider is None:
-            if use_grpc:
-                metric_exporter = GRPCMetricExporter(endpoint=self.config.endpoint)
-            else:
-                metrics_endpoint = self.config.endpoint.replace("/v1/traces", "/v1/metrics")
-                if metrics_endpoint == self.config.endpoint:
-                    base_url = self.config.endpoint.rstrip("/")
-                    metrics_endpoint = f"{base_url}/v1/metrics"
-                metric_exporter = OTLPMetricExporter(endpoint=metrics_endpoint)
-            metric_reader = PeriodicExportingMetricReader(
-                metric_exporter, export_interval_millis=5000
-            )
-            self.meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
-            if not hasattr(self, "_global_meter_provider_set"):
-                metrics.set_meter_provider(self.meter_provider)
-                self._global_meter_provider_set = True
-
-            meter = self.meter_provider.get_meter(__name__)
-
-            self.metrics = {
-                "tests_total": meter.create_counter(
-                    "rf.tests.total", description="Total number of tests executed", unit="1"
-                ),
-                "tests_passed": meter.create_counter(
-                    "rf.tests.passed", description="Number of tests that passed", unit="1"
-                ),
-                "tests_failed": meter.create_counter(
-                    "rf.tests.failed", description="Number of tests that failed", unit="1"
-                ),
-                "tests_skipped": meter.create_counter(
-                    "rf.tests.skipped", description="Number of tests that were skipped", unit="1"
-                ),
-                "test_duration": meter.create_histogram(
-                    "rf.test.duration", description="Test execution duration", unit="ms"
-                ),
-                "suite_duration": meter.create_histogram(
-                    "rf.suite.duration", description="Suite execution duration", unit="ms"
-                ),
-                "keywords_executed": meter.create_counter(
-                    "rf.keywords.executed",
-                    description="Total number of keywords executed",
-                    unit="1",
-                ),
-                "keyword_duration": meter.create_histogram(
-                    "rf.keyword.duration", description="Keyword execution duration", unit="ms"
-                ),
-            }
 
     @staticmethod
     def _parse_listener_args(args):
@@ -559,21 +501,6 @@ class TracingListener:
             if self._context_tokens:
                 detach(self._context_tokens.pop())
 
-            # Emit suite metrics
-            if self.metrics:
-                self.metrics["suite_duration"].record(
-                    result.elapsedtime,
-                    {"suite": result.name, "status": result.status, "trace_id": trace_id},
-                )
-
-            # Flush metrics immediately when the test suite ends — pabot may
-            # kill the worker before close() is called.
-            if self.meter_provider:
-                try:
-                    self.meter_provider.force_flush()
-                except Exception:
-                    pass
-
             self._suite_depth -= 1
 
         except Exception as e:
@@ -636,28 +563,6 @@ class TracingListener:
             # Detach the context token for this test span
             if self._context_tokens:
                 detach(self._context_tokens.pop())
-
-            # Emit test metrics
-            if self.metrics:
-                suite_name = result.parent.name if hasattr(result, "parent") else "unknown"
-                base_attrs = {"suite": suite_name, "trace_id": trace_id}
-
-                self.metrics["tests_total"].add(1, base_attrs)
-
-                if result.status == "PASS":
-                    self.metrics["tests_passed"].add(1, base_attrs)
-                elif result.status == "FAIL":
-                    attrs = base_attrs.copy()
-                    if hasattr(result, "tags") and result.tags:
-                        attrs["tags"] = ",".join(str(t) for t in list(result.tags)[:5])
-                    self.metrics["tests_failed"].add(1, attrs)
-                elif result.status == "SKIP":
-                    self.metrics["tests_skipped"].add(1, base_attrs)
-
-                # Record test duration
-                duration_attrs = base_attrs.copy()
-                duration_attrs["status"] = result.status
-                self.metrics["test_duration"].record(result.elapsedtime, duration_attrs)
 
         except Exception as e:
             print(f"TracingListener error in end_test: {e}")
@@ -724,28 +629,11 @@ class TracingListener:
             if self._context_tokens:
                 detach(self._context_tokens.pop())
 
-            # Emit keyword metrics
-            if self.metrics:
-                self.metrics["keywords_executed"].add(1, {"type": data.type, "trace_id": trace_id})
-                self.metrics["keyword_duration"].record(
-                    result.elapsedtime,
-                    {"type": data.type, "status": result.status, "trace_id": trace_id},
-                )
-
         except Exception as e:
             print(f"TracingListener error in end_keyword: {e}")
 
     def close(self):
         """Cleanup on listener close."""
-        # Flush metrics FIRST — with pabot, file lock contention in later
-        # steps can delay or prevent this if done last.
-        try:
-            if self.meter_provider:
-                self.meter_provider.force_flush()
-                self.meter_provider.shutdown()
-        except Exception as e:
-            print(f"TracingListener error shutting down metrics: {e}")
-
         try:
             while self.span_stack:
                 span = self.span_stack.pop()
