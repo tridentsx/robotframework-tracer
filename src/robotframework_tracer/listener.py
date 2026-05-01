@@ -27,15 +27,12 @@ else:
 
 import robot
 from google.protobuf.json_format import MessageToDict
-
 from opentelemetry import trace
 from opentelemetry.context import attach, detach
 from opentelemetry.exporter.otlp.proto.common.trace_encoder import encode_spans
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as HTTPExporter
 from opentelemetry.propagate import extract, inject
-
-# Import logs API
 from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
@@ -186,8 +183,6 @@ class TracingListener:
             provider = TracerProvider(resource=resource, sampler=sampler)
         else:
             provider = TracerProvider(resource=resource)
-
-        use_grpc = self.config.protocol == "grpc" and GRPC_AVAILABLE
 
         # Create exporter and processor once, reuse across all suites.
         # This avoids gRPC channel churn and thread leaks from creating
@@ -485,14 +480,7 @@ class TracingListener:
                 self._suite_depth -= 1
                 return
 
-            # Get trace_id BEFORE ending the span
-            trace_id = "unknown"
             if self.span_stack:
-                span = self.span_stack[-1]  # Peek at span before popping
-                if span.is_recording():
-                    span_context = span.get_span_context()
-                    trace_id = format(span_context.trace_id, "032x")
-
                 span = self.span_stack.pop()
                 SpanBuilder.set_span_status(span, result)
                 span.end()
@@ -546,14 +534,7 @@ class TracingListener:
     def end_test(self, data, result):
         """Close test span with verdict."""
         try:
-            # Get trace_id BEFORE ending the span
-            trace_id = "unknown"
             if self.span_stack:
-                span = self.span_stack[-1]  # Peek at span before popping
-                if span.is_recording():
-                    span_context = span.get_span_context()
-                    trace_id = format(span_context.trace_id, "032x")
-
                 span = self.span_stack.pop()
                 SpanBuilder.set_span_status(span, result)
                 if result.status == "FAIL":
@@ -604,14 +585,7 @@ class TracingListener:
                 self._skipped_keywords -= 1
                 return
 
-            # Get trace_id BEFORE ending the span
-            trace_id = "unknown"
             if self.span_stack:
-                span = self.span_stack[-1]  # Peek at span before popping
-                if span.is_recording():
-                    span_context = span.get_span_context()
-                    trace_id = format(span_context.trace_id, "032x")
-
                 span = self.span_stack.pop()
 
                 # Add event for setup/teardown end
