@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-14
+
 ### Added
 - **TLS CA certificate for OTLP exporter** (#12) - New `otel_exporter_otlp_traces_certificate`
   option to verify an HTTPS OTLP endpoint against a custom CA bundle. Maps to the OpenTelemetry
