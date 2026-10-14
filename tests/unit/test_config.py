@@ -346,3 +346,50 @@ def test_endpoints_empty_by_default():
     """Test that endpoints is empty list when not in config file."""
     config = TracerConfig()
     assert config.endpoints == []
+
+
+# --- OTLP certificate tests ---
+
+
+def test_certificate_default():
+    """Certificate defaults to the standard CA bundle path."""
+    config = TracerConfig()
+    assert config.otel_exporter_otlp_traces_certificate == "/var/lib/ca-certificates/ca-bundle.pem"
+
+
+def test_certificate_from_kwargs():
+    """Certificate can be set via listener kwargs."""
+    config = TracerConfig(
+        otel_exporter_otlp_traces_certificate="/var/lib/ca-certificates/ca-bundle.pem"
+    )
+    assert config.otel_exporter_otlp_traces_certificate == "/var/lib/ca-certificates/ca-bundle.pem"
+
+
+def test_certificate_from_env_var(monkeypatch):
+    """Certificate can be set via the OTEL standard env var."""
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE", "/etc/ssl/certs/ca-bundle.pem")
+    config = TracerConfig()
+    assert config.otel_exporter_otlp_traces_certificate == "/etc/ssl/certs/ca-bundle.pem"
+
+
+def test_certificate_kwargs_over_env(monkeypatch):
+    """Listener kwargs take precedence over env var for certificate."""
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE", "/env/ca.pem")
+    config = TracerConfig(otel_exporter_otlp_traces_certificate="/kwarg/ca.pem")
+    assert config.otel_exporter_otlp_traces_certificate == "/kwarg/ca.pem"
+
+
+def test_certificate_from_config_file(tmp_path, monkeypatch):
+    """Certificate can be set via config file."""
+    config_file = tmp_path / ".rf-tracer.json"
+    config_file.write_text(
+        json.dumps(
+            {
+                "version": "1.0.0",
+                "otel_exporter_otlp_traces_certificate": "/file/ca.pem",
+            }
+        )
+    )
+    monkeypatch.chdir(tmp_path)
+    config = TracerConfig()
+    assert config.otel_exporter_otlp_traces_certificate == "/file/ca.pem"

@@ -129,6 +129,14 @@ class TracerConfig:
         self.endpoints = self._file_config.get("endpoints", [])
         self.service_name = self._get_config("service_name", kwargs, "OTEL_SERVICE_NAME", "rf")
         self.protocol = self._get_config("protocol", kwargs, "RF_TRACER_PROTOCOL", "http")
+        # TLS CA certificate for the OTLP exporter (trusted certificate / CA bundle).
+        # Maps to the OTEL SDK standard env var OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE.
+        self.otel_exporter_otlp_traces_certificate = self._get_config(
+            "otel_exporter_otlp_traces_certificate",
+            kwargs,
+            "OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE",
+            "/var/lib/ca-certificates/ca-bundle.pem",
+        )
         self.capture_arguments = self._get_bool_config(
             "capture_arguments", kwargs, "RF_TRACER_CAPTURE_ARGUMENTS", True
         )

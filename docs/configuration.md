@@ -89,6 +89,18 @@ Due to Robot Framework listener argument parsing limitations with URLs, environm
 - **Description**: Protocol for OTLP export
 - **Note**: gRPC support in Phase 3
 
+#### `OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE`
+- **Type**: String (file path)
+- **Default**: `/var/lib/ca-certificates/ca-bundle.pem`
+- **Description**: Path to the trusted TLS CA certificate / CA bundle used to verify the OTLP endpoint over HTTPS. Maps to the OpenTelemetry SDK standard env var `OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE`. For `http` protocol it is passed as `certificate_file`; for `grpc` it is loaded into channel credentials. Also applied to the logs exporter.
+- **Listener arg key**: `otel_exporter_otlp_traces_certificate`
+- **Config file key**: `otel_exporter_otlp_traces_certificate`
+- **Example**: `/var/lib/ca-certificates/ca-bundle.pem`
+
+```bash
+robot --listener "robotframework_tracer.TracingListener:endpoint=https://opentelemetry-collector-bos.internal.ericsson.com/v1/traces:service_name=my-edns-tests:protocol=http:otel_exporter_otlp_traces_certificate=/var/lib/ca-certificates/ca-bundle.pem" tests/
+```
+
 ### Span Configuration
 
 #### `RF_TRACER_SPAN_PREFIX_STYLE`

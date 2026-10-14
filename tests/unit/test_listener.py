@@ -290,19 +290,25 @@ def test_multi_endpoint_creates_multiple_processors(
         "http://jaeger:4318/v1/traces",
         "http://tempo:4318/v1/traces",
     ]
+    listener.config.otel_exporter_otlp_traces_certificate = "/certs/ca.pem"
     # Force re-init of providers
     if hasattr(listener, "_trace_processors"):
         delattr(listener, "_trace_processors")
     listener._provider = None
     mock_exporter.reset_mock()
     mock_processor.reset_mock()
-    listener._init_providers("test-service")
+    with patch("robotframework_tracer.listener.os.path.isfile", return_value=True):
+        listener._init_providers("test-service")
 
     # Should have created 2 exporters and 2 processors
     assert mock_exporter.call_count == 2
     assert mock_processor.call_count == 2
-    mock_exporter.assert_any_call(endpoint="http://jaeger:4318/v1/traces")
-    mock_exporter.assert_any_call(endpoint="http://tempo:4318/v1/traces")
+    mock_exporter.assert_any_call(
+        endpoint="http://jaeger:4318/v1/traces", certificate_file="/certs/ca.pem"
+    )
+    mock_exporter.assert_any_call(
+        endpoint="http://tempo:4318/v1/traces", certificate_file="/certs/ca.pem"
+    )
 
 
 @patch("robotframework_tracer.listener.BatchSpanProcessor")
@@ -321,7 +327,99 @@ def test_single_endpoint_fallback_when_no_endpoints(
     listener._provider = None
     mock_exporter.reset_mock()
     mock_processor.reset_mock()
-    listener._init_providers("test-service")
+    with patch("robotframework_tracer.listener.os.path.isfile", return_value=False):
+        listener._init_providers("test-service")
 
     assert mock_processor.call_count == 1
-    mock_exporter.assert_called_with(endpoint="http://jaeger:4318/v1/traces")
+    mock_exporter.assert_called_with(endpoint="http://jaeger:4318/v1/traces", certificate_file=None)
+
+
+@patch("robotframework_tracer.listener.BatchSpanProcessor")
+@patch("robotframework_tracer.listener.HTTPExporter")
+@patch("robotframework_tracer.listener.TracerProvider")
+@patch("robotframework_tracer.listener.trace")
+def test_certificate_forwarded_to_http_exporter(
+    mock_trace, mock_provider, mock_exporter, mock_processor
+):
+    """Test that the TLS certificate path is forwarded to the HTTP exporter."""
+    listener = TracingListener()
+    listener.config.endpoints = []
+    listener.config.endpoint = "https://collector.example.com/v1/traces"
+    listener.config.otel_exporter_otlp_traces_certificate = "/var/lib/ca-certificates/ca-bundle.pem"
+    if hasattr(listener, "_trace_processors"):
+        delattr(listener, "_trace_processors")
+    listener._provider = None
+    mock_exporter.reset_mock()
+    mock_processor.reset_mock()
+    with patch("robotframework_tracer.listener.os.path.isfile", return_value=True):
+        listener._init_providers("test-service")
+
+    mock_exporter.assert_called_with(
+        endpoint="https://collector.example.com/v1/traces",
+        certificate_file="/var/lib/ca-certificates/ca-bundle.pem",
+    )
+
+
+@patch("robotframework_tracer.listener.GRPCExporter", create=True)
+def test_build_grpc_exporter_no_certificate(mock_grpc_exporter):
+    """Without a certificate, gRPC exporter is built with endpoint only."""
+    TracingListener._build_grpc_exporter("http://collector:4317", None)
+    mock_grpc_exporter.assert_called_once_with(endpoint="http://collector:4317")
+
+
+@patch("robotframework_tracer.listener.GRPCExporter", create=True)
+def test_build_grpc_exporter_with_certificate(mock_grpc_exporter, tmp_path):
+    """With a certificate, gRPC exporter is built with TLS channel credentials."""
+    import sys
+    import types
+
+    cert = tmp_path / "ca.pem"
+    cert.write_bytes(b"----CERT----")
+
+    fake_creds = Mock(name="channel_credentials")
+    fake_grpc = types.ModuleType("grpc")
+    fake_grpc.ssl_channel_credentials = Mock(return_value=fake_creds)
+
+    with patch.dict(sys.modules, {"grpc": fake_grpc}):
+        TracingListener._build_grpc_exporter("https://collector:4317", str(cert))
+
+    fake_grpc.ssl_channel_credentials.assert_called_once_with(root_certificates=b"----CERT----")
+    mock_grpc_exporter.assert_called_once_with(
+        endpoint="https://collector:4317", credentials=fake_creds
+    )
+
+
+@patch("robotframework_tracer.listener.GRPCExporter", create=True)
+def test_build_grpc_exporter_certificate_load_failure(mock_grpc_exporter, capsys):
+    """A missing/unreadable certificate falls back to an exporter without credentials."""
+    TracingListener._build_grpc_exporter("https://collector:4317", "/nonexistent/ca.pem")
+    captured = capsys.readouterr()
+    assert "Failed to load TLS certificate" in captured.out
+    mock_grpc_exporter.assert_called_once_with(endpoint="https://collector:4317")
+
+
+@patch("robotframework_tracer.listener.BatchSpanProcessor")
+@patch("robotframework_tracer.listener.HTTPExporter")
+@patch("robotframework_tracer.listener.TracerProvider")
+@patch("robotframework_tracer.listener.trace")
+def test_missing_certificate_falls_back_to_system_trust_store(
+    mock_trace, mock_provider, mock_exporter, mock_processor, capsys
+):
+    """A configured cert path that does not exist falls back to None (system trust store)."""
+    listener = TracingListener()
+    listener.config.endpoints = []
+    listener.config.endpoint = "https://collector.example.com/v1/traces"
+    listener.config.otel_exporter_otlp_traces_certificate = "/does/not/exist/ca.pem"
+    if hasattr(listener, "_trace_processors"):
+        delattr(listener, "_trace_processors")
+    listener._provider = None
+    mock_exporter.reset_mock()
+    mock_processor.reset_mock()
+    with patch("robotframework_tracer.listener.os.path.isfile", return_value=False):
+        listener._init_providers("test-service")
+
+    captured = capsys.readouterr()
+    assert "CA certificate not found" in captured.out
+    mock_exporter.assert_called_with(
+        endpoint="https://collector.example.com/v1/traces", certificate_file=None
+    )

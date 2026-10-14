@@ -182,6 +182,7 @@ max_arg_length=200" tests/
 ```bash
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 export OTEL_SERVICE_NAME=robot-framework-tests
+export OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE=/var/lib/ca-certificates/ca-bundle.pem
 robot --listener robotframework_tracer.TracingListener tests/
 ```
 
@@ -192,6 +193,7 @@ robot --listener robotframework_tracer.TracingListener tests/
 | `endpoint` | `http://localhost:4318/v1/traces` | OTLP endpoint URL |
 | `service_name` | `rf` | Service name in traces. Use `auto` to derive from suite name (ideal for pabot) |
 | `protocol` | `http` | Protocol: `http` or `grpc` |
+| `otel_exporter_otlp_traces_certificate` | `/var/lib/ca-certificates/ca-bundle.pem` | Path to trusted TLS CA certificate/bundle for the OTLP endpoint (maps to `OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE`) |
 | `span_prefix_style` | `none` | Span prefix style: `none`, `text`, `emoji` |
 | `capture_arguments` | `true` | Capture keyword arguments |
 | `max_arg_length` | `200` | Max length for arguments |

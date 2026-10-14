@@ -190,6 +190,15 @@ class TracingListener:
         if not hasattr(self, "_trace_processors"):
             self._trace_processors = []
             endpoints = self.config.endpoints if self.config.endpoints else [self.config.endpoint]
+            certificate_file = self.config.otel_exporter_otlp_traces_certificate or None
+            # Fall back to the system trust store if the configured CA bundle
+            # does not exist on this host (the default path is distro-specific).
+            if certificate_file and not os.path.isfile(certificate_file):
+                print(
+                    f"Warning: OTLP CA certificate not found at '{certificate_file}'; "
+                    "falling back to the system trust store"
+                )
+                certificate_file = None
             for ep in endpoints:
                 if self.config.protocol == "grpc":
                     if not GRPC_AVAILABLE:
@@ -197,11 +206,11 @@ class TracingListener:
                             "Warning: gRPC exporters not available. Install with: pip install robotframework-tracer[grpc]"
                         )
                         print("Falling back to HTTP exporters")
-                        exporter = HTTPExporter(endpoint=ep)
+                        exporter = HTTPExporter(endpoint=ep, certificate_file=certificate_file)
                     else:
-                        exporter = GRPCExporter(endpoint=ep)
+                        exporter = self._build_grpc_exporter(ep, certificate_file)
                 else:
-                    exporter = HTTPExporter(endpoint=ep)
+                    exporter = HTTPExporter(endpoint=ep, certificate_file=certificate_file)
                 self._trace_processors.append(BatchSpanProcessor(exporter))
 
         for proc in self._trace_processors:
@@ -224,7 +233,10 @@ class TracingListener:
             logs_endpoint = http_base.replace("/v1/traces", "/v1/logs")
             if logs_endpoint == http_base:
                 logs_endpoint = f"{http_base.rstrip('/')}/v1/logs"
-            log_exporter = OTLPLogExporter(endpoint=logs_endpoint)
+            log_exporter = OTLPLogExporter(
+                endpoint=logs_endpoint,
+                certificate_file=self.config.otel_exporter_otlp_traces_certificate or None,
+            )
 
             self.logger_provider = LoggerProvider(resource=resource)
             self.logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
@@ -233,6 +245,28 @@ class TracingListener:
 
             set_logger_provider(self.logger_provider)
             self.logger = self.logger_provider.get_logger(__name__)
+
+    @staticmethod
+    def _build_grpc_exporter(endpoint, certificate_file):
+        """Build a gRPC OTLP span exporter, optionally with TLS credentials.
+
+        The gRPC exporter does not accept a certificate file path directly;
+        it takes a grpc.ChannelCredentials object built from the CA bundle.
+        """
+        if certificate_file:
+            try:
+                import grpc
+
+                with open(certificate_file, "rb") as f:
+                    root_certs = f.read()
+                credentials = grpc.ssl_channel_credentials(root_certificates=root_certs)
+                return GRPCExporter(endpoint=endpoint, credentials=credentials)
+            except Exception as e:
+                print(
+                    f"Warning: Failed to load TLS certificate '{certificate_file}' "
+                    f"for gRPC exporter: {e}"
+                )
+        return GRPCExporter(endpoint=endpoint)
 
     @staticmethod
     def _parse_listener_args(args):

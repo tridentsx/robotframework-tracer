@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **TLS CA certificate for OTLP exporter** (#12) - New `otel_exporter_otlp_traces_certificate`
+  option to verify an HTTPS OTLP endpoint against a custom CA bundle. Maps to the OpenTelemetry
+  SDK standard env var `OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE`, and is also settable via listener
+  argument and `.rf-tracer.json`. Applied to HTTP and gRPC trace exporters and the logs exporter.
+
 ## [0.6.0] - 2026-04-30
 
 ### Removed

@@ -34,6 +34,10 @@
       "enum": ["http", "grpc"],
       "description": "Export protocol (default: http)"
     },
+    "otel_exporter_otlp_traces_certificate": {
+      "type": "string",
+      "description": "Path to the trusted TLS CA certificate / CA bundle for the OTLP exporter (maps to OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE)"
+    },
     "sample_rate": {
       "type": "number",
       "minimum": 0.0,
